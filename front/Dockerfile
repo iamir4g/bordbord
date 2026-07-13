@@ -2,10 +2,17 @@ FROM node:20-bookworm-slim
 
 WORKDIR /app
 
+ENV NEXT_TELEMETRY_DISABLED=1
+
 COPY package*.json ./
+RUN npm ci --include=optional
+
 COPY . .
-RUN rm -rf node_modules && npm ci --include=optional
+
+RUN npm run build
+
+ENV NODE_ENV=production
 
 EXPOSE 3000
 
-CMD ["sh", "-lc", "set -eu; if ! node -e \"try{require('lightningcss');process.exit(0)}catch(e){process.exit(1)}\" >/dev/null 2>&1; then npm ci --include=optional; fi; exec npm run dev -- --hostname 0.0.0.0 --port 3000"]
+CMD ["npm", "run", "start", "--", "--hostname", "0.0.0.0", "--port", "3000"]
