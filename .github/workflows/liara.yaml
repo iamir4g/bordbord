@@ -1,0 +1,62 @@
+name: CD-Liara
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: liara-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-back:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Liara CLI
+        run: npm i -g @liara/cli@9
+      - name: Deploy backend
+        env:
+          LIARA_TOKEN: ${{ secrets.LIARA_API_TOKEN }}
+          LIARA_APP: bordbordback
+          LIARA_TEAM_ID: ${{ vars.LIARA_TEAM_ID }}
+        working-directory: back
+        run: |
+          set -eu
+          extra_args=""
+          if [ -n "${LIARA_TEAM_ID:-}" ]; then
+            extra_args="--team-id=${LIARA_TEAM_ID}"
+          fi
+          liara deploy --app="${LIARA_APP}" --api-token="${LIARA_TOKEN}" --no-app-logs --port=1337 ${extra_args}
+
+  deploy-front:
+    runs-on: ubuntu-latest
+    needs:
+      - deploy-back
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install Liara CLI
+        run: npm i -g @liara/cli@9
+      - name: Deploy frontend
+        env:
+          LIARA_TOKEN: ${{ secrets.LIARA_API_TOKEN }}
+          LIARA_APP: bordbordfront
+          LIARA_TEAM_ID: ${{ vars.LIARA_TEAM_ID }}
+        working-directory: front
+        run: |
+          set -eu
+          extra_args=""
+          if [ -n "${LIARA_TEAM_ID:-}" ]; then
+            extra_args="--team-id=${LIARA_TEAM_ID}"
+          fi
+          liara deploy --app="${LIARA_APP}" --api-token="${LIARA_TOKEN}" --no-app-logs --port=3000 ${extra_args}
