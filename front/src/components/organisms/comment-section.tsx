@@ -2,11 +2,16 @@
 
 import Link from "next/link";
 import * as React from "react";
+import {
+  CornerDownLeft,
+  MessageSquare,
+  Plus,
+  Star,
+  ThumbsUp,
+  User,
+} from "lucide-react";
 
 import { CommentForm } from "@/components/molecules/comment-form";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/organisms/auth-provider";
 
 type CommentItem = {
@@ -93,7 +98,7 @@ function formatDate(value: string | null) {
   if (!value) return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return null;
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat("fa-IR", {
     year: "numeric",
     month: "short",
     day: "2-digit",
@@ -103,9 +108,11 @@ function formatDate(value: string | null) {
 export function CommentSection({
   gameSlug,
   gameId,
+  gameTitle,
 }: {
   gameSlug: string;
   gameId?: number | string;
+  gameTitle?: string;
 }) {
   const { user, loading: authLoading } = useAuth();
 
@@ -119,13 +126,11 @@ export function CommentSection({
     try {
       const res = await fetch(
         `/api/comments?gameSlug=${encodeURIComponent(gameSlug)}`,
-        {
-          cache: "no-store",
-        },
+        { cache: "no-store" },
       );
       const json = (await res.json().catch(() => null)) as unknown;
       if (!res.ok) {
-        setError("Failed to load comments.");
+        setError("بارگذاری نظرات با خطا مواجه شد.");
         setComments([]);
         return;
       }
@@ -147,9 +152,7 @@ export function CommentSection({
       if (!user) return;
       const res = await fetch(`/api/comments`, {
         method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ commentId, reaction }),
       });
       const json = (await res.json().catch(() => null)) as unknown;
@@ -188,63 +191,67 @@ export function CommentSection({
   const redirect = `/games/${gameSlug}`;
 
   return (
-    <div className="space-y-4">
-      {user ? (
-        <Card>
-          <CardContent className="pt-4">
-            {gameId ? (
-              <CommentForm
-                gameId={gameId}
-                gameSlug={gameSlug}
-                onSubmitted={load}
-              />
-            ) : (
-              <div className="text-sm text-slate-300">
-                Unable to submit comments for this game.
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      ) : authLoading ? null : (
-        <div>
-          <Link
-            href={`/login?redirect=${encodeURIComponent(redirect)}`}
-            className={cn(buttonVariants({ variant: "outline" }))}
-          >
-            Login to comment
-          </Link>
-        </div>
-      )}
+    <div
+      className="mt-8 grid grid-cols-1 items-start gap-8 lg:grid-cols-12"
+      id="comments-section"
+    >
+      <div className="order-last space-y-4 lg:order-first lg:col-span-7">
+        <h3 className="mb-4 flex items-center gap-2 text-base font-black text-slate-200">
+          <MessageSquare className="h-5 w-5 text-amber-400" />
+          <span>نظرات و امتیازات کاربران ({comments.length} نظر)</span>
+        </h3>
 
-      {error ? <div className="text-sm text-amber-200">{error}</div> : null}
+        {error ? (
+          <div className="text-xs text-amber-200">{error}</div>
+        ) : null}
 
-      {loading ? (
-        <div className="text-sm text-slate-300">Loading comments…</div>
-      ) : comments.length === 0 ? (
-        <Card>
-          <CardContent className="pt-4 text-sm text-slate-300">
-            No reviews yet.
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {comments.slice(0, 8).map((c) => (
-            <Card key={c.id}>
-              <CardContent className="pt-4 text-sm text-slate-200">
-                {c.authorName || c.createdAt ? (
-                  <div className="mb-2 flex items-center justify-between gap-3 text-xs text-slate-400">
-                    <div className="truncate">{c.authorName ?? ""}</div>
-                    <div className="shrink-0">
-                      {formatDate(c.createdAt) ?? ""}
+        {loading ? (
+          <div className="text-xs text-slate-400">در حال بارگذاری نظرات…</div>
+        ) : comments.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-800 bg-slate-900/20 p-8 text-center text-xs text-slate-400">
+            اولین کسی باشید که برای بازی {gameTitle ?? "این بازی"} نظر و امتیاز
+            ثبت می‌کند!
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {comments.map((c) => (
+              <div
+                key={c.id}
+                className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 transition-all duration-300 hover:border-slate-700"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-slate-700 bg-slate-950 text-slate-400">
+                      <User className="h-5 w-5 text-slate-500" />
+                    </div>
+                    <div>
+                      <strong className="block text-xs text-slate-200 sm:text-sm">
+                        {c.authorName ?? "کاربر"}
+                      </strong>
+                      <span className="mt-0.5 block font-mono text-[10px] text-slate-500">
+                        {formatDate(c.createdAt) ?? ""}
+                      </span>
                     </div>
                   </div>
-                ) : null}
-                {c.content}
-                <div className="mt-3 flex gap-2">
-                  <Button
+                </div>
+
+                <div className="mt-4 whitespace-pre-line text-justify text-xs leading-relaxed text-slate-300 sm:text-sm">
+                  {c.content}
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-850/50 pt-3">
+                  {!user && !authLoading ? (
+                    <Link
+                      href={`/login?redirect=${encodeURIComponent(redirect)}`}
+                      className="flex items-center gap-1 rounded-lg border border-amber-500/10 bg-amber-500/5 px-3 py-1.5 text-[10px] text-amber-500 transition-colors hover:bg-amber-500/10 hover:text-amber-400"
+                    >
+                      <CornerDownLeft className="h-3 w-3" />
+                      <span>ورود برای پاسخ</span>
+                    </Link>
+                  ) : null}
+
+                  <button
                     type="button"
-                    size="sm"
-                    variant={c.viewerReaction === "like" ? "amber" : "outline"}
                     disabled={!user}
                     onClick={() =>
                       void reactTo(
@@ -252,31 +259,42 @@ export function CommentSection({
                         c.viewerReaction === "like" ? "none" : "like",
                       )
                     }
+                    className={`flex items-center gap-1 rounded-lg border px-2.5 py-1.5 text-[10px] transition-colors ${
+                      c.viewerReaction === "like"
+                        ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                        : "border-slate-800 bg-slate-950 text-slate-400 hover:text-amber-400"
+                    } disabled:cursor-not-allowed disabled:opacity-50`}
                   >
-                    Like ({c.likesCount})
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={
-                      c.viewerReaction === "dislike" ? "amber" : "outline"
-                    }
-                    disabled={!user}
-                    onClick={() =>
-                      void reactTo(
-                        c.id,
-                        c.viewerReaction === "dislike" ? "none" : "dislike",
-                      )
-                    }
-                  >
-                    Dislike ({c.dislikesCount})
-                  </Button>
+                    <ThumbsUp className="h-3 w-3" />
+                    <span>موافق با نظر ({c.likesCount})</span>
+                  </button>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-3xl border border-slate-800 bg-slate-900/60 p-5 sm:p-6 lg:col-span-5">
+        <div className="mb-4 flex items-center gap-2">
+          <Plus className="h-5 w-5 text-amber-500" />
+          <h3 className="text-base font-bold text-slate-200">
+            ثبت نظر و نمره‌دهی سبک IMDB
+          </h3>
         </div>
-      )}
+
+        {gameId ? (
+          <CommentForm
+            gameId={gameId}
+            gameSlug={gameSlug}
+            onSubmitted={load}
+          />
+        ) : (
+          <div className="text-xs text-slate-400">
+            امکان ثبت نظر برای این بازی وجود ندارد.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

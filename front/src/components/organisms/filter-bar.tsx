@@ -12,10 +12,10 @@ export function FilterBar({
   onChange: (category: string) => void;
 }) {
   return (
-    <div className="sticky top-16 z-30 border-b border-white/10 bg-[#0b1220]/80 backdrop-blur">
-      <div className="mx-auto w-full max-w-5xl px-6">
+    <div className="sticky top-16 z-30 border-b border-slate-800 bg-slate-950/90 backdrop-blur-md">
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex gap-2 overflow-x-auto py-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {["All", ...categories].map((label) => {
+          {["همه", ...categories].map((label) => {
             const isActive = active === label;
             return (
               <button
@@ -23,10 +23,10 @@ export function FilterBar({
                 type="button"
                 onClick={() => onChange(label)}
                 className={cn(
-                  "whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  "whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-all duration-300",
                   isActive
-                    ? "border-indigo-400/30 bg-indigo-500/15 text-indigo-200"
-                    : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                    ? "border-amber-500/30 bg-amber-500/15 text-amber-400"
+                    : "border-slate-800 bg-slate-900/60 text-slate-300 hover:border-amber-500/20 hover:text-amber-300",
                 )}
               >
                 {label}
@@ -38,4 +38,3 @@ export function FilterBar({
     </div>
   );
 }
-

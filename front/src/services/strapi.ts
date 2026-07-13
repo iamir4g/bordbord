@@ -67,10 +67,16 @@ function unwrap<T>(entity: { attributes?: T } & Partial<T>): T {
   } as T;
 }
 
-function withPopulate(path: string, populate: string[]) {
+function buildListUrl(path: string, populate: string[]) {
   const qs = new URLSearchParams();
   populate.forEach((p, idx) => qs.set(`populate[${idx}]`, p));
+  qs.set("pagination[pageSize]", "100");
+  qs.set("sort", "createdAt:desc");
   return `${path}?${qs.toString()}`;
+}
+
+function withPopulate(path: string, populate: string[]) {
+  return buildListUrl(path, populate);
 }
 
 function withPopulateAndFilters(
@@ -81,6 +87,7 @@ function withPopulateAndFilters(
   const qs = new URLSearchParams();
   populate.forEach((p, idx) => qs.set(`populate[${idx}]`, p));
   Object.entries(filters).forEach(([k, v]) => qs.set(k, v));
+  qs.set("pagination[pageSize]", "100");
   return `${path}?${qs.toString()}`;
 }
 
@@ -110,14 +117,27 @@ export type Game = {
   id?: number;
   documentId?: string;
   title?: string;
+  titleEnglish?: string;
   slug?: string;
   description?: string;
+  story?: string;
+  videoUrl?: string;
   minPlayers?: number;
   maxPlayers?: number;
+  bestPlayerCount?: string;
   playingTime?: number;
   age?: number;
+  languageDependency?: string;
+  releaseYear?: number;
   complexity?: number;
   rating?: number;
+  averageRating?: number;
+  ratingsCount?: number;
+  ratingGameplay?: number;
+  ratingArt?: number;
+  ratingRules?: number;
+  ratingStrategy?: number;
+  ratingReplay?: number;
   images?: RelationMany<StrapiMedia>;
   categories?: RelationMany<{ name?: string; slug?: string }>;
   mechanics?: RelationMany<{ name?: string; slug?: string }>;
@@ -129,10 +149,30 @@ export type Publisher = {
   id?: number;
   documentId?: string;
   name?: string;
+  nameEnglish?: string;
   slug?: string;
   bio?: string;
+  foundedYear?: number;
+  country?: string;
+  website?: string;
   logo?: RelationOne<StrapiMedia>;
   games?: RelationMany<Game>;
+};
+
+export type Article = {
+  id?: number;
+  documentId?: string;
+  title?: string;
+  slug?: string;
+  brief?: string;
+  content?: string;
+  author?: string;
+  publishedDate?: string;
+  readTime?: string;
+  category?: string;
+  likes?: number;
+  tags?: string[];
+  coverImage?: RelationOne<StrapiMedia>;
 };
 
 export type Designer = {
@@ -161,7 +201,14 @@ export async function getGames() {
 export async function getGameBySlug(slug: string) {
   const url = withPopulateAndFilters(
     "/api/games",
-    ["images", "categories", "mechanics", "publisher", "designer"],
+    [
+      "images",
+      "categories",
+      "mechanics",
+      "publisher",
+      "publisher.logo",
+      "designer",
+    ],
     { "filters[slug][$eq]": slug },
   );
   const res = await fetchJson<StrapiCollectionResponse<Game>>(url, {
@@ -189,6 +236,35 @@ export async function getPublisherBySlug(slug: string) {
   });
   const first = res.data[0];
   return first ? unwrap<Publisher>(first) : null;
+}
+
+export async function getPublishers() {
+  const url = withPopulate("/api/publishers", ["logo", "games"]);
+  const res = await fetchJson<StrapiCollectionResponse<Publisher>>(url, {
+    cache: "no-store",
+  });
+  return res.data.map((e) => unwrap<Publisher>(e));
+}
+
+export async function getArticles() {
+  const url = withPopulate("/api/articles", ["coverImage"]);
+  const res = await fetchJson<StrapiCollectionResponse<Article>>(url, {
+    cache: "no-store",
+  });
+  return res.data.map((e) => unwrap<Article>(e));
+}
+
+export async function getArticleBySlug(slug: string) {
+  const url = withPopulateAndFilters(
+    "/api/articles",
+    ["coverImage"],
+    { "filters[slug][$eq]": slug },
+  );
+  const res = await fetchJson<StrapiCollectionResponse<Article>>(url, {
+    cache: "no-store",
+  });
+  const first = res.data[0];
+  return first ? unwrap<Article>(first) : null;
 }
 
 export async function getDesignerBySlug(slug: string) {

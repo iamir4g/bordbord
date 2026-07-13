@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useSearchParams } from "next/navigation";
 
 import type { Game } from "@/services/strapi";
 import { Container } from "@/components/atoms/container";
@@ -38,21 +39,59 @@ function extractCategoryNames(game: Game) {
   return [];
 }
 
-export function GamesExplorer({ games, categories }: { games: Game[]; categories: string[] }) {
-  const [active, setActive] = React.useState("All");
+function getPublisherName(game: Game) {
+  const rel = game.publisher as unknown;
+  return (
+    (getNested(rel, ["data", "attributes", "name"]) as string | undefined) ??
+    (getNested(rel, ["name"]) as string | undefined) ??
+    ""
+  );
+}
+
+export function GamesExplorer({
+  games,
+  categories,
+}: {
+  games: Game[];
+  categories: string[];
+}) {
+  const searchParams = useSearchParams();
+  const query = (searchParams.get("q") ?? "").trim().toLowerCase();
+  const [active, setActive] = React.useState("همه");
 
   const filtered = React.useMemo(() => {
-    if (active === "All") return games;
-    return games.filter((g) => extractCategoryNames(g).some((c) => c.toLowerCase() === active.toLowerCase()));
-  }, [active, games]);
+    return games.filter((g) => {
+      const matchesCategory =
+        active === "همه" ||
+        extractCategoryNames(g).some((c) => c === active);
+
+      if (!matchesCategory) return false;
+      if (!query) return true;
+
+      const haystack = [
+        g.title ?? "",
+        g.titleEnglish ?? "",
+        getPublisherName(g),
+        ...extractCategoryNames(g),
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(query);
+    });
+  }, [active, games, query]);
 
   return (
     <>
       <FilterBar categories={categories} active={active} onChange={setActive} />
-      <Container id="games" className="py-10">
-        <div className="text-sm text-slate-300">
-          Showing <span className="font-semibold text-zinc-100">{filtered.length}</span>{" "}
-          {filtered.length === 1 ? "game" : "games"}
+      <Container id="games" className="animate-fade-in py-10">
+        <div className="text-sm text-slate-400">
+          نمایش{" "}
+          <span className="font-semibold text-amber-400">{filtered.length}</span>{" "}
+          بازی
+          {query ? (
+            <span className="text-slate-500"> برای «{searchParams.get("q")}»</span>
+          ) : null}
         </div>
         <div className="mt-5">
           <GameGrid games={filtered} />
@@ -61,4 +100,3 @@ export function GamesExplorer({ games, categories }: { games: Game[]; categories
     </>
   );
 }
-
