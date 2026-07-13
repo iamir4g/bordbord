@@ -1,0 +1,119 @@
+{
+  "kind": "collectionType",
+  "collectionName": "games",
+  "info": {
+    "singularName": "game",
+    "pluralName": "games",
+    "displayName": "Game"
+  },
+  "options": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "titleEnglish": {
+      "type": "string"
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "title",
+      "required": true
+    },
+    "description": {
+      "type": "richtext"
+    },
+    "story": {
+      "type": "text"
+    },
+    "videoUrl": {
+      "type": "string"
+    },
+    "bestPlayerCount": {
+      "type": "string"
+    },
+    "languageDependency": {
+      "type": "string"
+    },
+    "releaseYear": {
+      "type": "integer"
+    },
+    "averageRating": {
+      "type": "decimal"
+    },
+    "ratingsCount": {
+      "type": "integer"
+    },
+    "ratingGameplay": {
+      "type": "decimal"
+    },
+    "ratingArt": {
+      "type": "decimal"
+    },
+    "ratingRules": {
+      "type": "decimal"
+    },
+    "ratingStrategy": {
+      "type": "decimal"
+    },
+    "ratingReplay": {
+      "type": "decimal"
+    },
+    "images": {
+      "type": "media",
+      "multiple": true,
+      "allowedTypes": ["images"]
+    },
+    "minPlayers": {
+      "type": "integer"
+    },
+    "maxPlayers": {
+      "type": "integer"
+    },
+    "playingTime": {
+      "type": "integer"
+    },
+    "age": {
+      "type": "integer"
+    },
+    "complexity": {
+      "type": "decimal"
+    },
+    "categories": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::category.category",
+      "inversedBy": "games"
+    },
+    "mechanics": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::mechanic.mechanic",
+      "inversedBy": "games"
+    },
+    "publisher": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::publisher.publisher",
+      "inversedBy": "games"
+    },
+    "designer": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::designer.designer",
+      "inversedBy": "games"
+    },
+    "comments": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::comment.comment",
+      "mappedBy": "game"
+    },
+    "wishlists": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::wishlist.wishlist",
+      "mappedBy": "games"
+    }
+  }
+}
