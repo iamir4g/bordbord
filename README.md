@@ -2,8 +2,8 @@
 
 ## Structure
 
-- frontend: Next.js (App Router) + TypeScript + Tailwind
-- backend: Strapi + PostgreSQL
+- front: Next.js (App Router) + TypeScript + Tailwind
+- back: Strapi + PostgreSQL
 
 ## Prereqs
 
@@ -25,9 +25,9 @@ On first run, create the Strapi admin user in the browser.
 
 ## Environment
 
-- Root: .env (ports + Postgres defaults used by Compose)
-- Backend: backend/.env (Strapi + database connection)
-- Frontend: frontend/.env (Strapi API URLs)
+- Root: `env` file (ports + Postgres defaults used by Compose)
+- Backend: `back/.env` (Strapi + database connection)
+- Frontend: `front/.env` (Strapi API URLs)
 
 ## Notes
 
