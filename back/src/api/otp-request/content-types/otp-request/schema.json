@@ -1,0 +1,56 @@
+{
+  "kind": "collectionType",
+  "collectionName": "otp_requests",
+  "info": {
+    "singularName": "otp-request",
+    "pluralName": "otp-requests",
+    "displayName": "OTP Request"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "phone": {
+      "type": "string",
+      "required": true
+    },
+    "purpose": {
+      "type": "enumeration",
+      "enum": ["auth"],
+      "default": "auth",
+      "required": true
+    },
+    "codeHash": {
+      "type": "string",
+      "required": true
+    },
+    "attempts": {
+      "type": "integer",
+      "default": 0,
+      "required": true
+    },
+    "expiresAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "resendAvailableAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "consumedAt": {
+      "type": "datetime"
+    },
+    "lastSentAt": {
+      "type": "datetime",
+      "required": true
+    },
+    "ipAddress": {
+      "type": "string"
+    },
+    "user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user"
+    }
+  }
+}
