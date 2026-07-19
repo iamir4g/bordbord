@@ -97,6 +97,8 @@ export async function GET(req: Request) {
           const id = getNested(c, ["id"]);
           const content = getNested(c, ["content"]);
           const username = getNested(c, ["author", "username"]);
+          const publisherName = getNested(c, ["publisher", "name"]);
+          const publisherSlug = getNested(c, ["publisher", "slug"]);
           const createdAt = getNested(c, ["createdAt"]);
           const likesCount = getNested(c, ["likesCount"]);
           const dislikesCount = getNested(c, ["dislikesCount"]);
@@ -120,6 +122,20 @@ export async function GET(req: Request) {
                   ? { attributes: { username } }
                   : { attributes: { username: null } },
               },
+              publisher: {
+                data:
+                  typeof publisherName === "string"
+                    ? {
+                        attributes: {
+                          name: publisherName,
+                          slug:
+                            typeof publisherSlug === "string"
+                              ? publisherSlug
+                              : null,
+                        },
+                      }
+                    : null,
+              },
             },
           };
         })
@@ -139,13 +155,21 @@ export async function POST(req: Request) {
     content?: string;
     gameId?: number | string;
     gameSlug?: string;
+    publisherSlug?: string;
   } | null;
 
   const content = payload?.content?.trim() ?? "";
   const gameSlug = payload?.gameSlug ?? "";
+  const publisherSlug = payload?.publisherSlug?.trim() ?? "";
 
-  if (!content || !gameSlug) {
+  if (!content || !gameSlug || !publisherSlug) {
     return NextResponse.json({ error: "Missing fields." }, { status: 400 });
+  }
+  if (content.length < 100) {
+    return NextResponse.json(
+      { error: "متن دیدگاه باید حداقل ۱۰۰ کاراکتر باشد." },
+      { status: 400 },
+    );
   }
 
   const strapiUrl = new URL("/api/comments/submit", getStrapiBaseUrl());
@@ -155,7 +179,7 @@ export async function POST(req: Request) {
       Authorization: `Bearer ${jwt}`,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ content, gameSlug }),
+    body: JSON.stringify({ content, gameSlug, publisherSlug }),
   });
 
   if (!res.ok) {

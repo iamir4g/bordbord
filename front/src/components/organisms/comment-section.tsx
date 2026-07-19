@@ -6,18 +6,19 @@ import {
   CornerDownLeft,
   MessageSquare,
   Plus,
-  Star,
   ThumbsUp,
   User,
 } from "lucide-react";
 
 import { CommentForm } from "@/components/molecules/comment-form";
 import { useAuth } from "@/components/organisms/auth-provider";
+import type { Publisher } from "@/services/strapi";
 
 type CommentItem = {
   id: number;
   content: string;
   authorName: string | null;
+  publisherName: string | null;
   createdAt: string | null;
   likesCount: number;
   dislikesCount: number;
@@ -74,6 +75,17 @@ function toComments(json: unknown): CommentItem[] {
         getNested(entry, ["author", "data", "username"]) ??
         getNested(entry, ["author", "username"]) ??
         null;
+      const publisherName =
+        getNested(entry, [
+          "attributes",
+          "publisher",
+          "data",
+          "attributes",
+          "name",
+        ]) ??
+        getNested(entry, ["publisher", "data", "name"]) ??
+        getNested(entry, ["publisher", "name"]) ??
+        null;
 
       if (typeof id !== "number") return null;
       if (typeof content !== "string" || content.trim().length === 0)
@@ -82,6 +94,7 @@ function toComments(json: unknown): CommentItem[] {
         id,
         content,
         authorName: typeof authorName === "string" ? authorName : null,
+        publisherName: typeof publisherName === "string" ? publisherName : null,
         createdAt: typeof createdAt === "string" ? createdAt : null,
         likesCount: typeof likesCount === "number" ? likesCount : 0,
         dislikesCount: typeof dislikesCount === "number" ? dislikesCount : 0,
@@ -109,10 +122,12 @@ export function CommentSection({
   gameSlug,
   gameId,
   gameTitle,
+  publishers,
 }: {
   gameSlug: string;
   gameId?: number | string;
   gameTitle?: string;
+  publishers: Publisher[];
 }) {
   const { user, loading: authLoading } = useAuth();
 
@@ -165,8 +180,8 @@ export function CommentSection({
       const viewerReaction = getNested(data, ["viewerReaction"]);
 
       if (typeof id !== "number") return;
-      setComments((prev) =>
-        prev.map((c) =>
+      setComments((prev: CommentItem[]) =>
+        prev.map((c: CommentItem) =>
           c.id !== id
             ? c
             : {
@@ -201,9 +216,7 @@ export function CommentSection({
           <span>نظرات و امتیازات کاربران ({comments.length} نظر)</span>
         </h3>
 
-        {error ? (
-          <div className="text-xs text-amber-200">{error}</div>
-        ) : null}
+        {error ? <div className="text-xs text-amber-200">{error}</div> : null}
 
         {loading ? (
           <div className="text-xs text-slate-400">در حال بارگذاری نظرات…</div>
@@ -214,7 +227,7 @@ export function CommentSection({
           </div>
         ) : (
           <div className="space-y-4">
-            {comments.map((c) => (
+            {comments.map((c: CommentItem) => (
               <div
                 key={c.id}
                 className="rounded-2xl border border-slate-800 bg-slate-900/50 p-5 transition-all duration-300 hover:border-slate-700"
@@ -228,6 +241,11 @@ export function CommentSection({
                       <strong className="block text-xs text-slate-200 sm:text-sm">
                         {c.authorName ?? "کاربر"}
                       </strong>
+                      {c.publisherName ? (
+                        <span className="mt-1 inline-flex rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-400">
+                          ناشر انتخاب‌شده: {c.publisherName}
+                        </span>
+                      ) : null}
                       <span className="mt-0.5 block font-mono text-[10px] text-slate-500">
                         {formatDate(c.createdAt) ?? ""}
                       </span>
@@ -287,6 +305,7 @@ export function CommentSection({
           <CommentForm
             gameId={gameId}
             gameSlug={gameSlug}
+            publishers={publishers}
             onSubmitted={load}
           />
         ) : (

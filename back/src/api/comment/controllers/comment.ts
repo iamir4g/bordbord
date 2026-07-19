@@ -45,6 +45,7 @@ export default factories.createCoreController("api::comment.comment", () => ({
       },
       populate: {
         author: true,
+        publisher: true,
         likedBy: true,
         dislikedBy: true,
       },
@@ -55,12 +56,16 @@ export default factories.createCoreController("api::comment.comment", () => ({
         ? comments.map((c: any) => {
             const likedByIds = Array.isArray(c?.likedBy)
               ? (c.likedBy as unknown[])
-                  .map((u) => (u && typeof u === "object" ? (u as any).id : null))
+                  .map((u) =>
+                    u && typeof u === "object" ? (u as any).id : null,
+                  )
                   .filter((id): id is number => typeof id === "number")
               : [];
             const dislikedByIds = Array.isArray(c?.dislikedBy)
               ? (c.dislikedBy as unknown[])
-                  .map((u) => (u && typeof u === "object" ? (u as any).id : null))
+                  .map((u) =>
+                    u && typeof u === "object" ? (u as any).id : null,
+                  )
                   .filter((id): id is number => typeof id === "number")
               : [];
 
@@ -90,6 +95,23 @@ export default factories.createCoreController("api::comment.comment", () => ({
                           : null,
                     }
                   : null,
+              publisher:
+                c?.publisher && typeof c.publisher === "object"
+                  ? {
+                      id:
+                        typeof c.publisher.id === "number"
+                          ? c.publisher.id
+                          : null,
+                      name:
+                        typeof c.publisher.name === "string"
+                          ? c.publisher.name
+                          : null,
+                      slug:
+                        typeof c.publisher.slug === "string"
+                          ? c.publisher.slug
+                          : null,
+                    }
+                  : null,
             };
           })
         : [],
@@ -112,7 +134,9 @@ export default factories.createCoreController("api::comment.comment", () => ({
           : NaN;
 
     const reaction =
-      reactionRaw === "like" || reactionRaw === "dislike" || reactionRaw === "none"
+      reactionRaw === "like" ||
+      reactionRaw === "dislike" ||
+      reactionRaw === "none"
         ? reactionRaw
         : null;
 
@@ -193,6 +217,7 @@ export default factories.createCoreController("api::comment.comment", () => ({
       },
       populate: {
         game: true,
+        publisher: true,
       },
       limit: 50,
     });
@@ -214,6 +239,23 @@ export default factories.createCoreController("api::comment.comment", () => ({
                     slug: typeof c.game.slug === "string" ? c.game.slug : null,
                   }
                 : null,
+            publisher:
+              c?.publisher && typeof c.publisher === "object"
+                ? {
+                    id:
+                      typeof c.publisher.id === "number"
+                        ? c.publisher.id
+                        : null,
+                    name:
+                      typeof c.publisher.name === "string"
+                        ? c.publisher.name
+                        : null,
+                    slug:
+                      typeof c.publisher.slug === "string"
+                        ? c.publisher.slug
+                        : null,
+                  }
+                : null,
           }))
         : [],
     };
@@ -228,8 +270,17 @@ export default factories.createCoreController("api::comment.comment", () => ({
       typeof body["content"] === "string" ? body["content"].trim() : "";
     const gameSlug =
       typeof body["gameSlug"] === "string" ? body["gameSlug"] : "";
+    const publisherSlug =
+      typeof body["publisherSlug"] === "string"
+        ? body["publisherSlug"].trim()
+        : "";
 
-    if (!content || !gameSlug) return ctx.badRequest("Missing fields");
+    if (!content || !gameSlug || !publisherSlug) {
+      return ctx.badRequest("Missing fields");
+    }
+    if (content.length < 100) {
+      return ctx.badRequest("Comment must be at least 100 characters long");
+    }
 
     const game = await strapi.db.query("api::game.game").findOne({
       where: {
@@ -240,10 +291,23 @@ export default factories.createCoreController("api::comment.comment", () => ({
     const gameId = (game as any)?.id;
     if (typeof gameId !== "number") return ctx.notFound("Unknown game");
 
+    const publisher = await strapi.db
+      .query("api::publisher.publisher")
+      .findOne({
+        where: {
+          slug: publisherSlug,
+        },
+        select: ["id", "slug", "name"],
+      });
+    const publisherId = (publisher as any)?.id;
+    if (typeof publisherId !== "number")
+      return ctx.notFound("Unknown publisher");
+
     const created = await strapi.db.query("api::comment.comment").create({
       data: {
         content,
         game: gameId,
+        publisher: publisherId,
         author: user.id,
         isApproved: false,
         isRejected: false,
@@ -269,6 +333,17 @@ export default factories.createCoreController("api::comment.comment", () => ({
               title:
                 typeof (game as any)?.title === "string"
                   ? (game as any).title
+                  : null,
+            },
+            publisher: {
+              id: typeof publisherId === "number" ? publisherId : null,
+              slug:
+                typeof (publisher as any)?.slug === "string"
+                  ? (publisher as any).slug
+                  : null,
+              name:
+                typeof (publisher as any)?.name === "string"
+                  ? (publisher as any).name
                   : null,
             },
           }
@@ -317,6 +392,20 @@ export default factories.createCoreController("api::comment.comment", () => ({
       (body["data"] && typeof body["data"] === "object"
         ? (body["data"] as Record<string, unknown>)
         : {}) ?? {};
+    const content =
+      typeof data["content"] === "string" ? data["content"].trim() : "";
+    const publisher = data["publisher"];
+
+    if (content.length < 100) {
+      return ctx.badRequest("Comment must be at least 100 characters long");
+    }
+    if (
+      publisher === null ||
+      publisher === undefined ||
+      (typeof publisher === "string" && publisher.trim().length === 0)
+    ) {
+      return ctx.badRequest("Publisher is required");
+    }
 
     ctx.request.body = {
       ...body,

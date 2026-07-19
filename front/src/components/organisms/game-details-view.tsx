@@ -27,7 +27,7 @@ import {
   stripHtml,
   type PublisherSummary,
 } from "@/lib/strapi-helpers";
-import type { Game } from "@/services/strapi";
+import type { Game, Publisher } from "@/services/strapi";
 
 function GameVideoPlayer({
   gameTitle,
@@ -287,12 +287,14 @@ function WishlistInline({
 export function GameDetailsView({
   game,
   publisher,
+  publishers,
   designerName,
   otherGamesByPublisher,
   similarGames,
 }: {
   game: Game;
   publisher: PublisherSummary;
+  publishers: Publisher[];
   designerName: string | null;
   otherGamesByPublisher: Game[];
   similarGames: Game[];
@@ -581,6 +583,7 @@ export function GameDetailsView({
         gameSlug={slug}
         gameId={gameId}
         gameTitle={game.title}
+        publishers={publishers}
       />
     </div>
   );

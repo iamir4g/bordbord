@@ -8,7 +8,7 @@ import {
   getPublisherFromGame,
   getSimilarGames,
 } from "@/lib/strapi-helpers";
-import { getGameBySlug, getGames } from "@/services/strapi";
+import { getGameBySlug, getGames, getPublishers } from "@/services/strapi";
 
 export default async function GamePage({
   params,
@@ -16,13 +16,15 @@ export default async function GamePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const game = await getGameBySlug(slug);
+  const gameData = await getGameBySlug(slug);
 
-  if (!game) {
+  if (!gameData) {
     notFound();
   }
+  const game = gameData as NonNullable<typeof gameData>;
 
   const allGames = await getGames().catch(() => []);
+  const publishers = await getPublishers().catch(() => []);
   const publisher = getPublisherFromGame(game);
   const designer = getDesignerFromGame(game);
   const otherGamesByPublisher = getOtherGamesByPublisher(game, allGames);
@@ -34,6 +36,7 @@ export default async function GamePage({
         <GameDetailsView
           game={game}
           publisher={publisher}
+          publishers={publishers}
           designerName={designer.name}
           otherGamesByPublisher={otherGamesByPublisher}
           similarGames={similarGames}

@@ -10,7 +10,8 @@
   "attributes": {
     "content": {
       "type": "text",
-      "required": true
+      "required": true,
+      "minLength": 100
     },
     "isApproved": {
       "type": "boolean",
@@ -30,6 +31,12 @@
       "type": "relation",
       "relation": "manyToOne",
       "target": "plugin::users-permissions.user"
+    },
+    "publisher": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::publisher.publisher",
+      "inversedBy": "comments"
     },
     "likedBy": {
       "type": "relation",
