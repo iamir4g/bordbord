@@ -192,6 +192,14 @@ async function issueJwtForUser(userId: number) {
   return await jwtService.issue({ id: userId });
 }
 
+function validatePassword(password: string) {
+  if (password.length < 8) {
+    return "رمز عبور باید حداقل ۸ کاراکتر باشد.";
+  }
+
+  return null;
+}
+
 export default () => ({
   normalizePhone,
 
@@ -360,6 +368,42 @@ export default () => ({
           email: user.email ?? createSyntheticEmail(normalized.local),
           phone: normalized.local,
         },
+      },
+    };
+  },
+
+  async setPassword(userId: number, password: string) {
+    const validationError = validatePassword(password);
+    if (validationError) {
+      return {
+        ok: false as const,
+        status: 400,
+        message: validationError,
+      };
+    }
+
+    const userService = strapi.plugin("users-permissions").service("user");
+    const existing = await strapi.db.query(USER_UID).findOne({
+      where: { id: userId },
+      select: ["id"],
+    });
+
+    if (!existing) {
+      return {
+        ok: false as const,
+        status: 404,
+        message: "کاربر پیدا نشد.",
+      };
+    }
+
+    await userService.edit(userId, { password });
+
+    return {
+      ok: true as const,
+      status: 200,
+      data: {
+        ok: true,
+        message: "رمز عبور با موفقیت ذخیره شد.",
       },
     };
   },

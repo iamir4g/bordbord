@@ -6,10 +6,12 @@ import * as React from "react";
 
 import { Container } from "@/components/atoms/container";
 import { Heading } from "@/components/atoms/heading";
+import { OtpAuthForm } from "@/components/organisms/otp-auth-form";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/components/organisms/auth-provider";
+import { normalizePhone } from "@/lib/auth-phone";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,6 +20,7 @@ export default function LoginPage() {
 
   const redirectTo = searchParams.get("redirect") ?? "/";
 
+  const [mode, setMode] = React.useState<"password" | "otp">("password");
   const [identifier, setIdentifier] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [submitting, setSubmitting] = React.useState(false);
@@ -35,7 +38,9 @@ export default function LoginPage() {
         body: JSON.stringify({ identifier, password }),
       });
 
-      const json = (await res.json().catch(() => null)) as { error?: string } | null;
+      const json = (await res.json().catch(() => null)) as {
+        error?: string;
+      } | null;
       if (!res.ok) {
         setError(json?.error ?? "Login failed.");
         return;
@@ -68,41 +73,83 @@ export default function LoginPage() {
               ورود / عضویت
             </CardHeader>
             <CardContent>
-              <form onSubmit={onSubmit} className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-sm text-slate-300">ایمیل یا نام کاربری</label>
-                  <Input
-                    value={identifier}
-                    onChange={(e) => setIdentifier(e.target.value)}
-                    autoComplete="username"
-                    placeholder="you@example.com"
-                    required
-                    dir="ltr"
-                    className="text-left"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm text-slate-300">رمز عبور</label>
-                  <Input
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    type="password"
-                    autoComplete="current-password"
-                    required
-                    dir="ltr"
-                    className="text-left"
-                  />
-                </div>
-
-                {error ? (
-                  <div className="text-sm text-rose-400">{error}</div>
-                ) : null}
-
-                <Button type="submit" disabled={submitting} className="w-full">
-                  {submitting ? "در حال ورود…" : "ورود"}
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={mode === "password" ? "default" : "outline"}
+                  onClick={() => setMode("password")}
+                >
+                  ورود با رمز
                 </Button>
-              </form>
+                <Button
+                  type="button"
+                  variant={mode === "otp" ? "default" : "outline"}
+                  onClick={() => setMode("otp")}
+                >
+                  ورود با OTP
+                </Button>
+              </div>
+
+              {mode === "password" ? (
+                <form onSubmit={onSubmit} className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm text-slate-300">
+                      شماره موبایل، ایمیل یا نام کاربری
+                    </label>
+                    <Input
+                      value={identifier}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const raw = e.target.value;
+                        setIdentifier(
+                          raw.startsWith("09") ||
+                            raw.startsWith("9") ||
+                            raw.startsWith("98")
+                            ? normalizePhone(raw)
+                            : raw,
+                        );
+                      }}
+                      autoComplete="username"
+                      placeholder="09123456789"
+                      required
+                      dir="ltr"
+                      className="text-left"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-sm text-slate-300">رمز عبور</label>
+                    <Input
+                      value={password}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                        setPassword(e.target.value)
+                      }
+                      type="password"
+                      autoComplete="current-password"
+                      required
+                      dir="ltr"
+                      className="text-left"
+                    />
+                  </div>
+
+                  {error ? (
+                    <div className="text-sm text-rose-400">{error}</div>
+                  ) : null}
+
+                  <Button
+                    type="submit"
+                    disabled={submitting}
+                    className="w-full"
+                  >
+                    {submitting ? "در حال ورود…" : "ورود با رمز عبور"}
+                  </Button>
+                </form>
+              ) : (
+                <OtpAuthForm
+                  redirectTo={redirectTo}
+                  submitLabel="ارسال کد ورود"
+                  introText="اگر هنوز برای حسابت رمز تعیین نکرده‌ای، می‌توانی با کد یکبارمصرف وارد شوی."
+                />
+              )}
             </CardContent>
           </Card>
         </div>
@@ -110,4 +157,3 @@ export default function LoginPage() {
     </div>
   );
 }
-

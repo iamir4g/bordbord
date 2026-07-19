@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+import { extractPhoneFromIdentity } from "@/lib/auth-phone";
+
 function getStrapiBaseUrl() {
   return (
     process.env.STRAPI_API_URL ??
@@ -62,6 +64,11 @@ export async function GET() {
   }
 
   return NextResponse.json({
-    user: { id: user.id, username: user.username, email: user.email },
+    user: {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      phone: extractPhoneFromIdentity(user.username, user.email) ?? undefined,
+    },
   });
 }

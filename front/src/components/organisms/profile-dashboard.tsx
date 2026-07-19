@@ -10,12 +10,14 @@ import { GameGrid } from "@/components/organisms/game-grid";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export type ProfileUser = {
   id: number;
   username?: string;
   email?: string;
+  phone?: string;
 };
 
 export type ProfileComment = {
@@ -127,10 +129,17 @@ export function ProfileDashboard({
   comments: ProfileComment[];
 }) {
   const [section, setSection] = React.useState<
-    "wishlist" | "comments" | "notifications"
+    "wishlist" | "comments" | "notifications" | "security"
   >("wishlist");
   const [notifications, setNotifications] = React.useState<LocalNotification[]>(
     [],
+  );
+  const [password, setPassword] = React.useState("");
+  const [confirmPassword, setConfirmPassword] = React.useState("");
+  const [passwordLoading, setPasswordLoading] = React.useState(false);
+  const [passwordError, setPasswordError] = React.useState<string | null>(null);
+  const [passwordSuccess, setPasswordSuccess] = React.useState<string | null>(
+    null,
   );
 
   React.useEffect(() => {
@@ -140,25 +149,70 @@ export function ProfileDashboard({
     return () => clearTimeout(t);
   }, [comments, user.id]);
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = notifications.filter(
+    (n: LocalNotification) => !n.read,
+  ).length;
 
   function markAsRead(id: string) {
-    setNotifications((prev) => {
-      const next = prev.map((n) => (n.id === id ? { ...n, read: true } : n));
+    setNotifications((prev: LocalNotification[]) => {
+      const next = prev.map((n: LocalNotification) =>
+        n.id === id ? { ...n, read: true } : n,
+      );
       saveNotifications(user.id, next);
       return next;
     });
   }
 
   function markAllAsRead() {
-    setNotifications((prev) => {
-      const next = prev.map((n) => ({ ...n, read: true }));
+    setNotifications((prev: LocalNotification[]) => {
+      const next = prev.map((n: LocalNotification) => ({ ...n, read: true }));
       saveNotifications(user.id, next);
       return next;
     });
   }
 
-  const displayName = user.username ?? user.email ?? `User #${user.id}`;
+  async function handlePasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setPasswordError(null);
+    setPasswordSuccess(null);
+
+    if (password.length < 8) {
+      setPasswordError("رمز عبور باید حداقل ۸ کاراکتر باشد.");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      setPasswordError("تکرار رمز عبور با رمز اصلی یکسان نیست.");
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      const res = await fetch("/api/auth/password/set", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        error?: string;
+        message?: string;
+      } | null;
+
+      if (!res.ok) {
+        setPasswordError(json?.error ?? "ذخیره رمز عبور ناموفق بود.");
+        return;
+      }
+
+      setPassword("");
+      setConfirmPassword("");
+      setPasswordSuccess(json?.message ?? "رمز عبور با موفقیت ذخیره شد.");
+    } finally {
+      setPasswordLoading(false);
+    }
+  }
+
+  const displayName =
+    user.phone ?? user.username ?? user.email ?? `User #${user.id}`;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -225,6 +279,19 @@ export function ProfileDashboard({
                 {unreadCount > 0 ? (
                   <Badge variant="amber">{unreadCount}</Badge>
                 ) : null}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSection("security")}
+                className={cn(
+                  buttonVariants({
+                    variant: section === "security" ? "default" : "outline",
+                    size: "sm",
+                  }),
+                  "w-full justify-start",
+                )}
+              >
+                Security
               </button>
             </CardContent>
           </Card>
@@ -314,8 +381,10 @@ export function ProfileDashboard({
                   ) : (
                     notifications
                       .slice()
-                      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-                      .map((n) => (
+                      .sort((a: LocalNotification, b: LocalNotification) =>
+                        b.createdAt.localeCompare(a.createdAt),
+                      )
+                      .map((n: LocalNotification) => (
                         <Card key={n.id} className={n.read ? "opacity-80" : ""}>
                           <CardContent className="pt-4">
                             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -355,6 +424,99 @@ export function ProfileDashboard({
                         </Card>
                       ))
                   )}
+                </div>
+              </div>
+            ) : null}
+
+            {section === "security" ? (
+              <div>
+                <Heading className="text-xl">امنیت حساب</Heading>
+                <div className="mt-4 grid gap-4">
+                  <Card>
+                    <CardHeader className="text-sm font-semibold text-zinc-100">
+                      روش‌های ورود
+                    </CardHeader>
+                    <CardContent className="space-y-3 text-sm text-slate-300">
+                      <div>
+                        شماره موبایل:
+                        <span className="mr-2 font-bold text-amber-400">
+                          {user.phone ?? "نامشخص"}
+                        </span>
+                      </div>
+                      <p className="text-slate-400">
+                        با این شماره همیشه می‌توانی با کد OTP وارد شوی. اگر برای
+                        ورودهای بعدی رمز عبور هم می‌خواهی، از فرم زیر برای تعیین
+                        یا تغییر آن استفاده کن.
+                      </p>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="text-sm font-semibold text-zinc-100">
+                      تعیین یا تغییر رمز عبور
+                    </CardHeader>
+                    <CardContent>
+                      <form
+                        onSubmit={handlePasswordSubmit}
+                        className="space-y-4"
+                      >
+                        <div className="space-y-2">
+                          <label className="text-sm text-slate-300">
+                            رمز عبور جدید
+                          </label>
+                          <Input
+                            value={password}
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>,
+                            ) => setPassword(e.target.value)}
+                            type="password"
+                            autoComplete="new-password"
+                            dir="ltr"
+                            className="text-left"
+                            placeholder="حداقل ۸ کاراکتر"
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <label className="text-sm text-slate-300">
+                            تکرار رمز عبور
+                          </label>
+                          <Input
+                            value={confirmPassword}
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>,
+                            ) => setConfirmPassword(e.target.value)}
+                            type="password"
+                            autoComplete="new-password"
+                            dir="ltr"
+                            className="text-left"
+                            placeholder="تکرار رمز عبور"
+                          />
+                        </div>
+
+                        {passwordError ? (
+                          <div className="text-sm text-rose-400">
+                            {passwordError}
+                          </div>
+                        ) : null}
+                        {passwordSuccess ? (
+                          <div className="text-sm text-emerald-400">
+                            {passwordSuccess}
+                          </div>
+                        ) : null}
+
+                        <Button
+                          type="submit"
+                          disabled={passwordLoading}
+                          className="w-full sm:w-auto"
+                        >
+                          {passwordLoading
+                            ? "در حال ذخیره..."
+                            : "ذخیره رمز عبور"}
+                        </Button>
+                      </form>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             ) : null}

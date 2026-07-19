@@ -6,6 +6,7 @@ import {
   type ProfileComment,
   type ProfileUser,
 } from "@/components/organisms/profile-dashboard";
+import { extractPhoneFromIdentity } from "@/lib/auth-phone";
 import type { Game } from "@/services/strapi";
 
 function getStrapiBaseUrl() {
@@ -75,7 +76,7 @@ export default async function ProfilePage() {
   }
 
   const user: ProfileUser = {
-    id: meId,
+    id: meId as number,
     username:
       typeof getNested(me.json, ["username"]) === "string"
         ? (getNested(me.json, ["username"]) as string)
@@ -84,12 +85,18 @@ export default async function ProfilePage() {
       typeof getNested(me.json, ["email"]) === "string"
         ? (getNested(me.json, ["email"]) as string)
         : undefined,
+    phone:
+      extractPhoneFromIdentity(
+        typeof getNested(me.json, ["username"]) === "string"
+          ? (getNested(me.json, ["username"]) as string)
+          : undefined,
+        typeof getNested(me.json, ["email"]) === "string"
+          ? (getNested(me.json, ["email"]) as string)
+          : undefined,
+      ) ?? undefined,
   };
 
-  const wishlistRes = await fetchJson(
-    "/api/wishlist/me",
-    jwt,
-  );
+  const wishlistRes = await fetchJson("/api/wishlist/me", jwt);
 
   const gamesData = getNested(wishlistRes.json, ["games"]);
   const wishlistGames: Game[] = Array.isArray(gamesData)
@@ -124,7 +131,8 @@ export default async function ProfilePage() {
             game:
               typeof gameTitle === "string" || typeof gameSlug === "string"
                 ? {
-                    title: typeof gameTitle === "string" ? gameTitle : undefined,
+                    title:
+                      typeof gameTitle === "string" ? gameTitle : undefined,
                     slug: typeof gameSlug === "string" ? gameSlug : undefined,
                   }
                 : null,

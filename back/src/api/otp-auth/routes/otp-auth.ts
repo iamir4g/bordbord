@@ -16,5 +16,13 @@ export default {
         auth: false,
       },
     },
+    {
+      method: "POST",
+      path: "/otp-auth/set-password",
+      handler: "otp-auth.setPassword",
+      config: {
+        auth: {},
+      },
+    },
   ],
 };
