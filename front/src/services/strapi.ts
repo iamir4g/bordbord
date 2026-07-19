@@ -21,6 +21,7 @@ export type StrapiSingleResponse<T> = {
 };
 
 type FetchOptions = Omit<RequestInit, "cache"> & { cache?: RequestCache };
+type QueryValue = string | number | boolean | null | undefined;
 
 function getBaseUrl() {
   return (
@@ -67,28 +68,44 @@ function unwrap<T>(entity: { attributes?: T } & Partial<T>): T {
   } as T;
 }
 
-function buildListUrl(path: string, populate: string[]) {
+function appendQueryValue(qs: URLSearchParams, key: string, value: QueryValue) {
+  if (value === null || value === undefined || value === "") return;
+  qs.set(key, String(value));
+}
+
+function buildListUrl(
+  path: string,
+  populate: string[],
+  query?: Record<string, QueryValue>,
+) {
   const qs = new URLSearchParams();
   populate.forEach((p, idx) => qs.set(`populate[${idx}]`, p));
-  qs.set("pagination[pageSize]", "100");
-  qs.set("sort", "createdAt:desc");
+  Object.entries(query ?? {}).forEach(([key, value]) =>
+    appendQueryValue(qs, key, value),
+  );
+  if (!qs.has("pagination[pageSize]")) {
+    qs.set("pagination[pageSize]", "100");
+  }
+  if (!qs.has("sort")) {
+    qs.set("sort", "createdAt:desc");
+  }
   return `${path}?${qs.toString()}`;
 }
 
-function withPopulate(path: string, populate: string[]) {
-  return buildListUrl(path, populate);
+function withPopulate(
+  path: string,
+  populate: string[],
+  query?: Record<string, QueryValue>,
+) {
+  return buildListUrl(path, populate, query);
 }
 
 function withPopulateAndFilters(
   path: string,
   populate: string[],
-  filters: Record<string, string>,
+  filters: Record<string, QueryValue>,
 ) {
-  const qs = new URLSearchParams();
-  populate.forEach((p, idx) => qs.set(`populate[${idx}]`, p));
-  Object.entries(filters).forEach(([k, v]) => qs.set(k, v));
-  qs.set("pagination[pageSize]", "100");
-  return `${path}?${qs.toString()}`;
+  return buildListUrl(path, populate, filters);
 }
 
 export function getStrapiMediaUrl(url?: string | null) {
@@ -185,13 +202,68 @@ export type Designer = {
   games?: RelationMany<Game>;
 };
 
-export async function getGames() {
-  const url = withPopulate("/api/games", [
-    "images",
-    "categories",
-    "mechanics",
-    "publisher",
-  ]);
+export type Category = {
+  id?: number;
+  documentId?: string;
+  name?: string;
+  slug?: string;
+};
+
+export type GameCatalogFilters = {
+  query?: string;
+  categorySlugs?: string[];
+  publisherSlug?: string;
+};
+
+function buildGameCatalogQuery(filters: GameCatalogFilters = {}) {
+  const query = new URLSearchParams();
+
+  const categorySlugs = Array.from(
+    new Set(
+      (filters.categorySlugs ?? []).map((item) => item.trim()).filter(Boolean),
+    ),
+  );
+
+  categorySlugs.forEach((slug, idx) => {
+    query.set(`filters[categories][slug][$in][${idx}]`, slug);
+  });
+
+  const trimmedQuery = filters.query?.trim();
+  if (trimmedQuery) {
+    const searchTargets = [
+      ["title"],
+      ["titleEnglish"],
+      ["publisher", "name"],
+      ["categories", "name"],
+    ];
+
+    searchTargets.forEach((segments, idx) => {
+      const key = segments.reduce(
+        (acc, segment) => `${acc}[${segment}]`,
+        `filters[$or][${idx}]`,
+      );
+      query.set(`${key}[$containsi]`, trimmedQuery);
+    });
+  }
+
+  const publisherSlug = filters.publisherSlug?.trim();
+  if (publisherSlug) {
+    query.set("filters[publisher][slug][$eq]", publisherSlug);
+  }
+
+  query.set("pagination[pageSize]", "100");
+  query.set("sort", "createdAt:desc");
+
+  return query;
+}
+
+export async function getGames(filters: GameCatalogFilters = {}) {
+  const query = buildGameCatalogQuery(filters);
+  const url = withPopulate(
+    "/api/games",
+    ["images", "categories", "mechanics", "publisher"],
+    Object.fromEntries(query.entries()),
+  );
   const res = await fetchJson<StrapiCollectionResponse<Game>>(url, {
     cache: "no-store",
   });
@@ -246,6 +318,17 @@ export async function getPublishers() {
   return res.data.map((e) => unwrap<Publisher>(e));
 }
 
+export async function getCategories() {
+  const url = withPopulate("/api/categories", [], {
+    "pagination[pageSize]": "100",
+    sort: "name:asc",
+  });
+  const res = await fetchJson<StrapiCollectionResponse<Category>>(url, {
+    cache: "no-store",
+  });
+  return res.data.map((e) => unwrap<Category>(e));
+}
+
 export async function getArticles() {
   const url = withPopulate("/api/articles", ["coverImage"]);
   const res = await fetchJson<StrapiCollectionResponse<Article>>(url, {
@@ -255,11 +338,9 @@ export async function getArticles() {
 }
 
 export async function getArticleBySlug(slug: string) {
-  const url = withPopulateAndFilters(
-    "/api/articles",
-    ["coverImage"],
-    { "filters[slug][$eq]": slug },
-  );
+  const url = withPopulateAndFilters("/api/articles", ["coverImage"], {
+    "filters[slug][$eq]": slug,
+  });
   const res = await fetchJson<StrapiCollectionResponse<Article>>(url, {
     cache: "no-store",
   });

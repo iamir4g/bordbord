@@ -19,6 +19,7 @@ import {
 
 import { Container } from "@/components/atoms/container";
 import { buttonVariants } from "@/components/ui/button";
+import { applyGameCatalogFiltersToSearchParams } from "@/lib/game-catalog-filters";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/components/organisms/auth-provider";
 
@@ -82,8 +83,10 @@ export function Header() {
 
   function handleSearch(value: string) {
     setSearchQuery(value);
-    const params = new URLSearchParams();
-    if (value.trim()) params.set("q", value.trim());
+    const params = applyGameCatalogFiltersToSearchParams(searchParams, {
+      query: value.trim(),
+      categorySlugs: searchParams.getAll("category"),
+    });
     const qs = params.toString();
     const target = qs ? `/games?${qs}` : "/games";
     if (pathname.startsWith("/games")) {

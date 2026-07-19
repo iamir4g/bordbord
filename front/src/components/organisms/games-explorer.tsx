@@ -1,100 +1,86 @@
 "use client";
 
 import * as React from "react";
-import { useSearchParams } from "next/navigation";
+import {
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 
 import type { Game } from "@/services/strapi";
 import { Container } from "@/components/atoms/container";
 import { FilterBar } from "@/components/organisms/filter-bar";
 import { GameGrid } from "@/components/organisms/game-grid";
+import {
+  applyGameCatalogFiltersToSearchParams,
+  type GameCatalogUiFilters,
+} from "@/lib/game-catalog-filters";
 
-function getNested(obj: unknown, path: Array<string | number>) {
-  let cur: unknown = obj;
-  for (const key of path) {
-    if (cur === null || cur === undefined) return undefined;
-    if (typeof key === "number") {
-      if (!Array.isArray(cur)) return undefined;
-      cur = cur[key];
-      continue;
-    }
-    if (typeof cur !== "object") return undefined;
-    cur = (cur as Record<string, unknown>)[key];
-  }
-  return cur;
-}
-
-function extractCategoryNames(game: Game) {
-  const rel = game.categories as unknown;
-  const data = getNested(rel, ["data"]);
-  if (Array.isArray(data)) {
-    return data
-      .map((e) => getNested(e, ["attributes", "name"]) ?? getNested(e, ["name"]))
-      .filter((v): v is string => typeof v === "string");
-  }
-  if (Array.isArray(rel)) {
-    return rel
-      .map((e) => getNested(e, ["name"]))
-      .filter((v): v is string => typeof v === "string");
-  }
-  return [];
-}
-
-function getPublisherName(game: Game) {
-  const rel = game.publisher as unknown;
-  return (
-    (getNested(rel, ["data", "attributes", "name"]) as string | undefined) ??
-    (getNested(rel, ["name"]) as string | undefined) ??
-    ""
-  );
-}
+type CategoryOption = {
+  name: string;
+  slug: string;
+};
 
 export function GamesExplorer({
   games,
   categories,
+  filters,
 }: {
   games: Game[];
-  categories: string[];
+  categories: CategoryOption[];
+  filters: GameCatalogUiFilters;
 }) {
+  const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const query = (searchParams.get("q") ?? "").trim().toLowerCase();
-  const [active, setActive] = React.useState("همه");
+  const query = filters.query.trim();
+  const activeCategories = filters.categorySlugs;
 
-  const filtered = React.useMemo(() => {
-    return games.filter((g) => {
-      const matchesCategory =
-        active === "همه" ||
-        extractCategoryNames(g).some((c) => c === active);
+  const toggleCategory = React.useCallback(
+    (category: string) => {
+      const nextCategories =
+        category === "همه"
+          ? []
+          : activeCategories.includes(category)
+            ? activeCategories.filter((item) => item !== category)
+            : [...activeCategories, category];
 
-      if (!matchesCategory) return false;
-      if (!query) return true;
-
-      const haystack = [
-        g.title ?? "",
-        g.titleEnglish ?? "",
-        getPublisherName(g),
-        ...extractCategoryNames(g),
-      ]
-        .join(" ")
-        .toLowerCase();
-
-      return haystack.includes(query);
-    });
-  }, [active, games, query]);
+      const nextParams = applyGameCatalogFiltersToSearchParams(searchParams, {
+        query,
+        categorySlugs: nextCategories,
+      });
+      const qs = nextParams.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname);
+    },
+    [activeCategories, pathname, query, router, searchParams],
+  );
 
   return (
     <>
-      <FilterBar categories={categories} active={active} onChange={setActive} />
+      <FilterBar
+        categories={categories}
+        activeCategories={activeCategories}
+        onChange={toggleCategory}
+      />
       <Container id="games" className="animate-fade-in py-10">
         <div className="text-sm text-slate-400">
           نمایش{" "}
-          <span className="font-semibold text-amber-400">{filtered.length}</span>{" "}
+          <span className="font-semibold text-amber-400">{games.length}</span>{" "}
           بازی
+          {activeCategories.length > 0 ? (
+            <span className="text-slate-500">
+              {" "}
+              با {activeCategories.length} دسته‌بندی فعال
+            </span>
+          ) : null}
           {query ? (
-            <span className="text-slate-500"> برای «{searchParams.get("q")}»</span>
+            <span className="text-slate-500">
+              {" "}برای «{query}»
+            </span>
           ) : null}
         </div>
         <div className="mt-5">
-          <GameGrid games={filtered} />
+          <GameGrid games={games} />
         </div>
       </Container>
     </>

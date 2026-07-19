@@ -2,26 +2,40 @@
 
 import { cn } from "@/lib/utils";
 
+type CategoryOption = {
+  name: string;
+  slug: string;
+};
+
 export function FilterBar({
   categories,
-  active,
+  activeCategories,
   onChange,
 }: {
-  categories: string[];
-  active: string;
+  categories: CategoryOption[];
+  activeCategories: string[];
   onChange: (category: string) => void;
 }) {
   return (
     <div className="sticky top-16 z-30 border-b border-slate-800 bg-slate-950/90 backdrop-blur-md">
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex gap-2 overflow-x-auto py-3 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {["همه", ...categories].map((label) => {
-            const isActive = active === label;
+          {[
+            { label: "همه", value: "همه" },
+            ...categories.map((category) => ({
+              label: category.name,
+              value: category.slug,
+            })),
+          ].map((item) => {
+            const isActive =
+              item.value === "همه"
+                ? activeCategories.length === 0
+                : activeCategories.includes(item.value);
             return (
               <button
-                key={label}
+                key={item.value}
                 type="button"
-                onClick={() => onChange(label)}
+                onClick={() => onChange(item.value)}
                 className={cn(
                   "whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium transition-all duration-300",
                   isActive
@@ -29,7 +43,7 @@ export function FilterBar({
                     : "border-slate-800 bg-slate-900/60 text-slate-300 hover:border-amber-500/20 hover:text-amber-300",
                 )}
               >
-                {label}
+                {item.label}
               </button>
             );
           })}

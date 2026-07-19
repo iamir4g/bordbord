@@ -3,14 +3,32 @@ import { Suspense } from "react";
 import { Container } from "@/components/atoms/container";
 import { Heading } from "@/components/atoms/heading";
 import { GamesExplorer } from "@/components/organisms/games-explorer";
-import { extractCategoryNames } from "@/lib/strapi-helpers";
-import { getGames } from "@/services/strapi";
+import { parseGameCatalogFilters } from "@/lib/game-catalog-filters";
+import { getCategories, getGames } from "@/services/strapi";
 
-export default async function GamesPage() {
-  const games = await getGames().catch(() => []);
-  const categories = Array.from(
-    new Set(games.flatMap((game) => extractCategoryNames(game))),
-  );
+export default async function GamesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    q?: string | string[];
+    category?: string | string[];
+  }>;
+}) {
+  const filters = parseGameCatalogFilters(await searchParams);
+  const [games, categories] = await Promise.all([
+    getGames({
+      query: filters.query,
+      categorySlugs: filters.categorySlugs,
+    }).catch(() => []),
+    getCategories().catch(() => []),
+  ]);
+
+  const categoryOptions = categories
+    .map((category) => ({
+      name: typeof category.name === "string" ? category.name : "",
+      slug: typeof category.slug === "string" ? category.slug : "",
+    }))
+    .filter((category) => category.name && category.slug);
 
   return (
     <div className="flex flex-1 flex-col animate-fade-in">
@@ -21,7 +39,11 @@ export default async function GamesPage() {
         </p>
       </Container>
       <Suspense fallback={null}>
-        <GamesExplorer games={games} categories={categories} />
+        <GamesExplorer
+          games={games}
+          categories={categoryOptions}
+          filters={filters}
+        />
       </Suspense>
     </div>
   );
