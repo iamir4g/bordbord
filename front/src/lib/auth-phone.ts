@@ -1,8 +1,6 @@
-export function toEnglishDigits(value: string) {
-  return value.replace(/[۰-۹]/g, (digit) =>
-    String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)),
-  );
-}
+import { toEnglishDigits } from "@/lib/digits";
+
+export { toEnglishDigits } from "@/lib/digits";
 
 export function normalizePhone(value: string) {
   const digits = toEnglishDigits(value).replace(/\D/g, "");

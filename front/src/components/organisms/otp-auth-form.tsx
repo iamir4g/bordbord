@@ -7,6 +7,12 @@ import { useAuth } from "@/components/organisms/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { normalizePhone } from "@/lib/auth-phone";
+import {
+  formatOtpForDisplay,
+  otpForBackend,
+  sanitizeOtpInput,
+  toPersianDigits,
+} from "@/lib/digits";
 
 type OtpAuthFormProps = {
   redirectTo: string;
@@ -64,7 +70,7 @@ export function OtpAuthForm({
       const res = await fetch("/api/auth/otp/send-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone: normalizePhone(phone) }),
       });
 
       const json = (await res.json().catch(() => null)) as {
@@ -116,7 +122,10 @@ export function OtpAuthForm({
       const res = await fetch("/api/auth/otp/verify-code", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code }),
+        body: JSON.stringify({
+          phone: normalizePhone(phone),
+          code: otpForBackend(code),
+        }),
       });
 
       const json = (await res.json().catch(() => null)) as {
@@ -146,13 +155,13 @@ export function OtpAuthForm({
         <div className="space-y-2">
           <label className="text-sm text-slate-300">شماره موبایل</label>
           <Input
-            value={phone}
+            value={toPersianDigits(phone)}
             onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
               setPhone(normalizePhone(e.target.value))
             }
             inputMode="numeric"
             autoComplete="tel"
-            placeholder="09123456789"
+            placeholder="۰۹۱۲۳۴۵۶۷۸۹"
             required
             dir="ltr"
             className="text-left"
@@ -175,7 +184,8 @@ export function OtpAuthForm({
     <form onSubmit={handleVerifyCode} className="space-y-4">
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-3 text-sm text-slate-300">
         کد تایید به شماره{" "}
-        <span className="font-bold text-amber-400">{phone}</span> ارسال شد.
+        <span className="font-bold text-amber-400">{toPersianDigits(phone)}</span>{" "}
+        ارسال شد.
         {codeExpired ? (
           <p className="mt-2 text-rose-400">کد منقضی شده است. کد جدید دریافت کنید.</p>
         ) : (
@@ -191,20 +201,20 @@ export function OtpAuthForm({
       <div className="space-y-2">
         <label className="text-sm text-slate-300">کد تایید ۴ رقمی</label>
         <Input
-          value={code}
+          value={formatOtpForDisplay(code)}
           onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-            setCode(e.target.value.replace(/[^\d۰-۹]/g, "").slice(0, 4))
+            setCode(sanitizeOtpInput(e.target.value))
           }
           inputMode="numeric"
           autoComplete="one-time-code"
-          placeholder="1234"
+          placeholder="۱۲۳۴"
           required
           dir="ltr"
           className="text-center text-lg tracking-[0.4em]"
         />
         {debugCode ? (
           <p className="text-xs text-amber-400">
-            کد تستی محیط توسعه: {debugCode}
+            کد تستی محیط توسعه: {toPersianDigits(debugCode)}
           </p>
         ) : null}
       </div>

@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/components/organisms/auth-provider";
 import { normalizePhone } from "@/lib/auth-phone";
+import { looksLikePhoneInput, toPersianDigits } from "@/lib/digits";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -35,7 +36,12 @@ export default function LoginPage() {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, password }),
+        body: JSON.stringify({
+          identifier: looksLikePhoneInput(identifier)
+            ? normalizePhone(identifier)
+            : identifier,
+          password,
+        }),
       });
 
       const json = (await res.json().catch(() => null)) as {
@@ -97,20 +103,21 @@ export default function LoginPage() {
                       شماره موبایل یا نام کاربری
                     </label>
                     <Input
-                      value={identifier}
+                      value={
+                        looksLikePhoneInput(identifier)
+                          ? toPersianDigits(identifier)
+                          : identifier
+                      }
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                         const raw = e.target.value;
                         setIdentifier(
-                          raw.startsWith("09") ||
-                            raw.startsWith("9") ||
-                            raw.startsWith("98") ||
-                            /^[۰-۹]/.test(raw)
+                          looksLikePhoneInput(raw)
                             ? normalizePhone(raw)
                             : raw,
                         );
                       }}
                       autoComplete="username"
-                      placeholder="09123456789 یا username"
+                      placeholder="۰۹۱۲۳۴۵۶۷۸۹ یا username"
                       required
                       dir="ltr"
                       className="text-left"
