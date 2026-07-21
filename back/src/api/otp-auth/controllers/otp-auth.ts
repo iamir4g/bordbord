@@ -12,7 +12,14 @@ export default {
     const result = await service.sendCode(phone, ctx);
 
     if (!result.ok) {
-      return ctx.throw(result.status, result.message);
+      ctx.status = result.status;
+      ctx.body = {
+        error: result.message,
+        ...(typeof result.cooldownSeconds === "number"
+          ? { cooldownSeconds: result.cooldownSeconds }
+          : {}),
+      };
+      return;
     }
 
     ctx.body = result.data;

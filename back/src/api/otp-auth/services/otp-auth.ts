@@ -46,7 +46,7 @@ function getNumericEnv(key: string, fallback: number) {
 
 function getOtpConfig() {
   return {
-    expiresInSeconds: getNumericEnv("OTP_EXPIRES_SECONDS", 120),
+    expiresInSeconds: getNumericEnv("OTP_EXPIRES_SECONDS", 180),
     resendIntervalSeconds: getNumericEnv("OTP_RESEND_SECONDS", 60),
     maxAttempts: getNumericEnv("OTP_MAX_ATTEMPTS", 5),
   };
@@ -295,7 +295,7 @@ export default () => ({
       now.getTime() + config.resendIntervalSeconds * 1000,
     );
 
-    await strapi.db.query(OTP_REQUEST_UID).create({
+    const createdRecord = await strapi.db.query(OTP_REQUEST_UID).create({
       data: {
         phone: normalized.local,
         purpose: AUTH_PURPOSE,
@@ -308,11 +308,26 @@ export default () => ({
       },
     });
 
-    await sendOtpSms({
-      phone: normalized.e164,
-      code,
-      message: `کد ورود شما: ${code}`,
-    });
+    try {
+      await sendOtpSms({
+        phone: normalized.e164,
+        code,
+        message: `کد ورود شما: ${code}`,
+      });
+    } catch (error) {
+      if (createdRecord?.id) {
+        await strapi.db.query(OTP_REQUEST_UID).delete({
+          where: { id: createdRecord.id },
+        });
+      }
+
+      strapi.log.error("[otp:sendCode] SMS delivery failed", error);
+      return {
+        ok: false as const,
+        status: 502,
+        message: "ارسال پیامک ناموفق بود. لطفا دوباره تلاش کنید.",
+      };
+    }
 
     return {
       ok: true as const,

@@ -14,6 +14,13 @@ type OtpAuthFormProps = {
   introText: string;
 };
 
+function formatCountdown(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes <= 0) return `${seconds} ثانیه`;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
 export function OtpAuthForm({
   redirectTo,
   submitLabel,
@@ -25,19 +32,28 @@ export function OtpAuthForm({
   const [step, setStep] = React.useState<"phone" | "code">("phone");
   const [phone, setPhone] = React.useState("");
   const [code, setCode] = React.useState("");
-  const [countdown, setCountdown] = React.useState(0);
+  const [resendCountdown, setResendCountdown] = React.useState(0);
+  const [expiryCountdown, setExpiryCountdown] = React.useState(0);
   const [debugCode, setDebugCode] = React.useState<string | null>(null);
   const [sending, setSending] = React.useState(false);
   const [verifying, setVerifying] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    if (countdown <= 0) return;
+    if (resendCountdown <= 0) return;
     const timer = window.setTimeout(() => {
-      setCountdown((prev: number) => Math.max(0, prev - 1));
+      setResendCountdown((prev: number) => Math.max(0, prev - 1));
     }, 1000);
     return () => window.clearTimeout(timer);
-  }, [countdown]);
+  }, [resendCountdown]);
+
+  React.useEffect(() => {
+    if (expiryCountdown <= 0) return;
+    const timer = window.setTimeout(() => {
+      setExpiryCountdown((prev: number) => Math.max(0, prev - 1));
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [expiryCountdown]);
 
   async function handleSendCode(e?: React.FormEvent) {
     e?.preventDefault();
@@ -54,11 +70,16 @@ export function OtpAuthForm({
       const json = (await res.json().catch(() => null)) as {
         error?: string;
         resendInSeconds?: number | null;
+        expiresInSeconds?: number | null;
+        cooldownSeconds?: number;
         debugCode?: string;
         phone?: string;
       } | null;
 
       if (!res.ok) {
+        if (typeof json?.cooldownSeconds === "number" && json.cooldownSeconds > 0) {
+          setResendCountdown(json.cooldownSeconds);
+        }
         setError(json?.error ?? "ارسال کد تایید ناموفق بود.");
         return;
       }
@@ -67,8 +88,11 @@ export function OtpAuthForm({
         json?.phone ? normalizePhone(json.phone) : normalizePhone(phone),
       );
       setDebugCode(typeof json?.debugCode === "string" ? json.debugCode : null);
-      setCountdown(
+      setResendCountdown(
         typeof json?.resendInSeconds === "number" ? json.resendInSeconds : 60,
+      );
+      setExpiryCountdown(
+        typeof json?.expiresInSeconds === "number" ? json.expiresInSeconds : 180,
       );
       setCode("");
       setStep("code");
@@ -79,6 +103,12 @@ export function OtpAuthForm({
 
   async function handleVerifyCode(e: React.FormEvent) {
     e.preventDefault();
+
+    if (expiryCountdown <= 0) {
+      setError("کد تایید منقضی شده است. لطفا کد جدید دریافت کنید.");
+      return;
+    }
+
     setVerifying(true);
     setError(null);
 
@@ -139,11 +169,23 @@ export function OtpAuthForm({
     );
   }
 
+  const codeExpired = expiryCountdown <= 0;
+
   return (
     <form onSubmit={handleVerifyCode} className="space-y-4">
       <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-3 text-sm text-slate-300">
         کد تایید به شماره{" "}
         <span className="font-bold text-amber-400">{phone}</span> ارسال شد.
+        {codeExpired ? (
+          <p className="mt-2 text-rose-400">کد منقضی شده است. کد جدید دریافت کنید.</p>
+        ) : (
+          <p className="mt-2 text-slate-400">
+            اعتبار کد:{" "}
+            <span className="font-medium text-slate-200" dir="ltr">
+              {formatCountdown(expiryCountdown)}
+            </span>
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -170,17 +212,25 @@ export function OtpAuthForm({
       {error ? <div className="text-sm text-rose-400">{error}</div> : null}
 
       <div className="flex flex-col gap-3 sm:flex-row">
-        <Button type="submit" disabled={verifying} className="flex-1">
+        <Button
+          type="submit"
+          disabled={verifying || codeExpired}
+          className="flex-1"
+        >
           {verifying ? "در حال تایید..." : "تایید و ورود"}
         </Button>
         <Button
           type="button"
           variant="outline"
           className="flex-1"
-          disabled={sending || countdown > 0}
+          disabled={sending || resendCountdown > 0}
           onClick={() => void handleSendCode()}
         >
-          {countdown > 0 ? `ارسال مجدد تا ${countdown} ثانیه` : "ارسال مجدد کد"}
+          {sending
+            ? "در حال ارسال..."
+            : resendCountdown > 0
+              ? `ارسال مجدد تا ${formatCountdown(resendCountdown)}`
+              : "ارسال مجدد کد"}
         </Button>
       </div>
 
@@ -192,7 +242,8 @@ export function OtpAuthForm({
           setStep("phone");
           setCode("");
           setError(null);
-          setCountdown(0);
+          setResendCountdown(0);
+          setExpiryCountdown(0);
         }}
       >
         ویرایش شماره موبایل

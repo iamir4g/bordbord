@@ -28,7 +28,21 @@ function getRequiredEnv(key: string) {
   return value;
 }
 
-async function sendViaIppanel(payload: SmsPayload) {
+function getSmsRetryConfig() {
+  const maxAttempts = Number(process.env.OTP_SMS_MAX_RETRIES ?? "3");
+  const delayMs = Number(process.env.OTP_SMS_RETRY_DELAY_MS ?? "1000");
+  return {
+    maxAttempts:
+      Number.isFinite(maxAttempts) && maxAttempts > 0 ? maxAttempts : 3,
+    delayMs: Number.isFinite(delayMs) && delayMs >= 0 ? delayMs : 1000,
+  };
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function sendViaIppanelOnce(payload: SmsPayload) {
   const token = getRequiredEnv("IPPANEL_API_TOKEN");
   const patternCode = getRequiredEnv("IPPANEL_PATTERN_CODE");
   const fromNumber = getRequiredEnv("IPPANEL_FROM_NUMBER");
@@ -61,9 +75,6 @@ async function sendViaIppanel(payload: SmsPayload) {
   if (!response.ok || !body?.meta?.status) {
     const detail =
       body?.meta?.message || `HTTP ${response.status} ${response.statusText}`;
-    strapi.log.error(
-      `[otp:ippanel] send failed phone=${payload.phone} detail=${detail} errors=${JSON.stringify(body?.meta?.errors ?? {})}`,
-    );
     throw new Error(`ippanel SMS send failed: ${detail}`);
   }
 
@@ -73,6 +84,36 @@ async function sendViaIppanel(payload: SmsPayload) {
   );
 
   return { provider: "ippanel" as const, accepted: true as const, outboxIds };
+}
+
+async function sendViaIppanel(payload: SmsPayload) {
+  const { maxAttempts, delayMs } = getSmsRetryConfig();
+  let lastError: unknown = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await sendViaIppanelOnce(payload);
+    } catch (error) {
+      lastError = error;
+      const detail =
+        error instanceof Error ? error.message : "Unknown ippanel error";
+      strapi.log.warn(
+        `[otp:ippanel] attempt ${attempt}/${maxAttempts} failed phone=${payload.phone} detail=${detail}`,
+      );
+
+      if (attempt < maxAttempts) {
+        await sleep(delayMs * attempt);
+      }
+    }
+  }
+
+  strapi.log.error(
+    `[otp:ippanel] all ${maxAttempts} attempts failed phone=${payload.phone}`,
+    lastError,
+  );
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("ippanel SMS send failed after retries.");
 }
 
 export async function sendOtpSms(payload: SmsPayload) {

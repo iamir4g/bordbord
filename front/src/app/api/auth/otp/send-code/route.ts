@@ -33,20 +33,32 @@ export async function POST(req: Request) {
 
   const json = (await res.json().catch(() => null)) as
     | {
-        error?: { message?: string };
+        error?: string | { message?: string };
         phone?: string;
         expiresInSeconds?: number;
         resendInSeconds?: number;
+        cooldownSeconds?: number;
         debugCode?: string;
       }
     | null;
 
   if (!res.ok) {
+    const rawError = json?.error;
     const message =
-      typeof json?.error?.message === "string"
-        ? json.error.message
-        : "ارسال کد تایید ناموفق بود.";
-    return NextResponse.json({ error: message }, { status: res.status });
+      typeof rawError === "string"
+        ? rawError
+        : typeof rawError?.message === "string"
+          ? rawError.message
+          : "ارسال کد تایید ناموفق بود.";
+    return NextResponse.json(
+      {
+        error: message,
+        ...(typeof json?.cooldownSeconds === "number"
+          ? { cooldownSeconds: json.cooldownSeconds }
+          : {}),
+      },
+      { status: res.status },
+    );
   }
 
   return NextResponse.json({
