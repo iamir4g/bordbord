@@ -53,9 +53,12 @@ function getOtpConfig() {
 }
 
 function toEnglishDigits(value: string) {
-  return value.replace(/[۰-۹]/g, (digit) =>
-    String("۰۱۲۳۴۵۶۷۸۹".indexOf(digit)),
-  );
+  return value.replace(/[۰-۹٠-٩]/g, (digit) => {
+    const persianIndex = "۰۱۲۳۴۵۶۷۸۹".indexOf(digit);
+    if (persianIndex >= 0) return String(persianIndex);
+    const arabicIndex = "٠١٢٣٤٥٦٧٨٩".indexOf(digit);
+    return arabicIndex >= 0 ? String(arabicIndex) : digit;
+  });
 }
 
 function normalizePhone(phone: string) {
@@ -130,36 +133,98 @@ async function getAuthenticatedRoleId() {
   return roleId;
 }
 
-async function findUserByPhone(phone: string) {
-  const user = await strapi.db.query(USER_UID).findOne({
-    where: {
-      $or: [
-        { phone },
-        { username: phone },
-        { email: createSyntheticEmail(phone) },
-      ],
-    },
-  });
+function userModelHasAttribute(attribute: string) {
+  try {
+    const model = strapi.getModel(USER_UID) as
+      | { attributes?: Record<string, unknown> }
+      | undefined;
+    return Boolean(model?.attributes?.[attribute]);
+  } catch {
+    return false;
+  }
+}
 
-  return (user as UserEntity | null) ?? null;
+async function findUserByPhone(phone: string) {
+  const filters: Array<Record<string, string>> = [
+    { username: phone },
+    { email: createSyntheticEmail(phone) },
+  ];
+
+  // Only query phone when the attribute exists; otherwise Postgres throws and
+  // verify-code returns a generic 500 right after a valid OTP.
+  if (userModelHasAttribute("phone")) {
+    filters.unshift({ phone });
+  }
+
+  try {
+    const user = await strapi.db.query(USER_UID).findOne({
+      where: { $or: filters },
+    });
+    return (user as UserEntity | null) ?? null;
+  } catch (error) {
+    strapi.log.warn(
+      "[otp:findUserByPhone] primary lookup failed, falling back to username/email",
+      error,
+    );
+    const user = await strapi.db.query(USER_UID).findOne({
+      where: {
+        $or: [
+          { username: phone },
+          { email: createSyntheticEmail(phone) },
+        ],
+      },
+    });
+    return (user as UserEntity | null) ?? null;
+  }
 }
 
 async function createUserForPhone(phone: string) {
   const userService = strapi.plugin("users-permissions").service("user");
   const roleId = await getAuthenticatedRoleId();
 
-  const created = await userService.add({
+  const payload: Record<string, unknown> = {
     username: createDefaultUsername(phone),
     email: createSyntheticEmail(phone),
-    phone,
     password: crypto.randomBytes(24).toString("hex"),
     provider: "local",
     confirmed: true,
     blocked: false,
     role: roleId,
-  });
+  };
 
-  return created as UserEntity;
+  if (userModelHasAttribute("phone")) {
+    payload.phone = phone;
+  }
+
+  try {
+    const created = await userService.add(payload);
+    return created as UserEntity;
+  } catch (error) {
+    // Unique conflict / race: another request may have created the user.
+    const existing = await findUserByPhone(phone);
+    if (existing) return existing;
+
+    // Retry without custom fields if phone column/schema is the problem.
+    if (payload.phone) {
+      strapi.log.warn(
+        "[otp:createUser] create with phone failed, retrying without phone",
+        error,
+      );
+      delete payload.phone;
+      try {
+        const created = await userService.add(payload);
+        return created as UserEntity;
+      } catch (retryError) {
+        const again = await findUserByPhone(phone);
+        if (again) return again;
+        strapi.log.error("[otp:createUser] failed", retryError);
+        throw retryError;
+      }
+    }
+
+    strapi.log.error("[otp:createUser] failed", error);
+    throw error;
+  }
 }
 
 function serializeUser(user: UserEntity, fallbackPhone?: string | null) {
@@ -216,10 +281,34 @@ async function findUserByIdentifier(identifier: string) {
   return (user as UserEntity | null) ?? null;
 }
 
+async function ensureUserPhone(user: UserEntity, phone: string) {
+  if (!userModelHasAttribute("phone")) return user;
+  if (user.phone === phone) return user;
+
+  try {
+    const updated = await strapi.db.query(USER_UID).update({
+      where: { id: user.id },
+      data: { phone },
+    });
+    return (updated as UserEntity) ?? { ...user, phone };
+  } catch (error) {
+    strapi.log.warn("[otp:ensureUserPhone] could not set phone", error);
+    return { ...user, phone };
+  }
+}
+
 async function findOrCreateUserByPhone(phone: string) {
   const existing = await findUserByPhone(phone);
-  if (existing) return { user: existing, isNewUser: false };
+  if (existing) {
+    const user = await ensureUserPhone(existing, phone);
+    return { user, isNewUser: false };
+  }
+
   const created = await createUserForPhone(phone);
+  if (!created?.id) {
+    throw new Error("Could not create user for OTP login.");
+  }
+
   return { user: created, isNewUser: true };
 }
 
@@ -252,7 +341,11 @@ function getCooldownSeconds(record: OtpRecord | null) {
 
 async function issueJwtForUser(userId: number) {
   const jwtService = strapi.plugin("users-permissions").service("jwt");
-  return await jwtService.issue({ id: userId });
+  const token = await jwtService.issue({ id: userId });
+  if (typeof token !== "string" || !token) {
+    throw new Error("JWT service returned an empty token.");
+  }
+  return token;
 }
 
 function validatePassword(password: string) {
@@ -410,9 +503,28 @@ export default () => ({
       };
     }
 
-    const { user, isNewUser } = await findOrCreateUserByPhone(normalized.local);
+    let user: UserEntity;
+    let isNewUser = false;
+
+    try {
+      const result = await findOrCreateUserByPhone(normalized.local);
+      user = result.user;
+      isNewUser = result.isNewUser;
+    } catch (error) {
+      strapi.log.error("[otp:verifyCode] findOrCreateUser failed", error);
+      return {
+        ok: false as const,
+        status: 500,
+        message: "ساخت حساب کاربری ناموفق بود. لطفا دوباره تلاش کنید.",
+      };
+    }
+
     if (!user?.id) {
-      throw new Error("Could not create or load user for OTP login.");
+      return {
+        ok: false as const,
+        status: 500,
+        message: "ساخت حساب کاربری ناموفق بود. لطفا دوباره تلاش کنید.",
+      };
     }
 
     if (user.blocked) {
@@ -423,16 +535,35 @@ export default () => ({
       };
     }
 
-    await strapi.db.query(OTP_REQUEST_UID).update({
-      where: { id: record.id },
-      data: {
-        consumedAt: new Date(),
-        attempts: attempts + 1,
-        user: user.id,
-      },
-    });
+    try {
+      await strapi.db.query(OTP_REQUEST_UID).update({
+        where: { id: record.id },
+        data: {
+          consumedAt: new Date(),
+          attempts: attempts + 1,
+          user: user.id,
+        },
+      });
+    } catch (error) {
+      strapi.log.error("[otp:verifyCode] consume otp failed", error);
+      return {
+        ok: false as const,
+        status: 500,
+        message: "ثبت تایید کد ناموفق بود. لطفا دوباره تلاش کنید.",
+      };
+    }
 
-    const jwt = await issueJwtForUser(user.id);
+    let jwt: string;
+    try {
+      jwt = await issueJwtForUser(user.id);
+    } catch (error) {
+      strapi.log.error("[otp:verifyCode] jwt issue failed", error);
+      return {
+        ok: false as const,
+        status: 500,
+        message: "صدور نشست ورود ناموفق بود. لطفا دوباره تلاش کنید.",
+      };
+    }
 
     return {
       ok: true as const,

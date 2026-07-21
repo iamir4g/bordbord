@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { normalizePhone } from "@/lib/auth-phone";
+import { otpForBackend } from "@/lib/digits";
+
 function getStrapiBaseUrl() {
   return (
     process.env.STRAPI_API_URL ??
@@ -8,13 +11,29 @@ function getStrapiBaseUrl() {
   );
 }
 
+function extractErrorMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  if (typeof error === "string" && error.trim()) return error;
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof (error as { message?: unknown }).message === "string"
+  ) {
+    return (error as { message: string }).message;
+  }
+  return fallback;
+}
+
 export async function POST(req: Request) {
   const payload = (await req.json().catch(() => null)) as
     | { phone?: string; code?: string }
     | null;
 
-  const phone = payload?.phone ?? "";
-  const code = payload?.code ?? "";
+  const phone = normalizePhone(payload?.phone ?? "");
+  const code = otpForBackend(payload?.code ?? "");
 
   if (!phone || !code) {
     return NextResponse.json(
@@ -23,36 +42,59 @@ export async function POST(req: Request) {
     );
   }
 
+  if (!/^09\d{9}$/.test(phone)) {
+    return NextResponse.json(
+      { error: "شماره موبایل معتبر نیست." },
+      { status: 400 },
+    );
+  }
+
+  if (!/^\d{4}$/.test(code)) {
+    return NextResponse.json(
+      { error: "کد تایید باید ۴ رقمی باشد." },
+      { status: 400 },
+    );
+  }
+
   const url = new URL("/api/otp-auth/verify-code", getStrapiBaseUrl());
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ phone, code }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ phone, code }),
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "ارتباط با سرور احراز هویت برقرار نشد." },
+      { status: 502 },
+    );
+  }
 
   const json = (await res.json().catch(() => null)) as
     | {
         jwt?: string;
         isNewUser?: boolean;
         user?: unknown;
-        error?: string;
+        error?: unknown;
         remainingAttempts?: number;
       }
     | null;
 
   if (!res.ok || !json?.jwt) {
+    const status = res.status >= 400 ? res.status : 400;
     return NextResponse.json(
       {
-        error: json?.error ?? "تایید کد ناموفق بود.",
+        error: extractErrorMessage(json?.error, "تایید کد ناموفق بود."),
         remainingAttempts:
           typeof json?.remainingAttempts === "number"
             ? json.remainingAttempts
             : undefined,
       },
-      { status: res.status || 400 },
+      { status },
     );
   }
 

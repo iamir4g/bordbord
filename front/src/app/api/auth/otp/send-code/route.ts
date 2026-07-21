@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { normalizePhone } from "@/lib/auth-phone";
+
 function getStrapiBaseUrl() {
   return (
     process.env.STRAPI_API_URL ??
@@ -13,10 +15,17 @@ export async function POST(req: Request) {
     | { phone?: string }
     | null;
 
-  const phone = payload?.phone ?? "";
+  const phone = normalizePhone(payload?.phone ?? "");
   if (!phone) {
     return NextResponse.json(
       { error: "شماره موبایل الزامی است." },
+      { status: 400 },
+    );
+  }
+
+  if (!/^09\d{9}$/.test(phone)) {
+    return NextResponse.json(
+      { error: "شماره موبایل معتبر نیست." },
       { status: 400 },
     );
   }
