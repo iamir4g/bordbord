@@ -42,7 +42,7 @@ export default function LoginPage() {
         error?: string;
       } | null;
       if (!res.ok) {
-        setError(json?.error ?? "Login failed.");
+        setError(json?.error ?? "ورود ناموفق بود.");
         return;
       }
 
@@ -94,7 +94,7 @@ export default function LoginPage() {
                 <form onSubmit={onSubmit} className="space-y-4">
                   <div className="space-y-2">
                     <label className="text-sm text-slate-300">
-                      شماره موبایل، ایمیل یا نام کاربری
+                      شماره موبایل یا نام کاربری
                     </label>
                     <Input
                       value={identifier}
@@ -103,13 +103,14 @@ export default function LoginPage() {
                         setIdentifier(
                           raw.startsWith("09") ||
                             raw.startsWith("9") ||
-                            raw.startsWith("98")
+                            raw.startsWith("98") ||
+                            /^[۰-۹]/.test(raw)
                             ? normalizePhone(raw)
                             : raw,
                         );
                       }}
                       autoComplete="username"
-                      placeholder="09123456789"
+                      placeholder="09123456789 یا username"
                       required
                       dir="ltr"
                       className="text-left"
@@ -147,7 +148,7 @@ export default function LoginPage() {
                 <OtpAuthForm
                   redirectTo={redirectTo}
                   submitLabel="ارسال کد ورود"
-                  introText="اگر هنوز برای حسابت رمز تعیین نکرده‌ای، می‌توانی با کد یکبارمصرف وارد شوی."
+                  introText="با شماره موبایل کد تایید دریافت می‌کنی. اگر رمز عبور هم تعیین کرده‌ای، می‌توانی از تب «ورود با رمز» استفاده کنی."
                 />
               )}
             </CardContent>

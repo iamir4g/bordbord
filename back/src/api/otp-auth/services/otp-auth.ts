@@ -25,6 +25,10 @@ type UserEntity = {
   id: number;
   username?: string;
   email?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  password?: string;
   blocked?: boolean;
   confirmed?: boolean;
 };
@@ -129,7 +133,11 @@ async function getAuthenticatedRoleId() {
 async function findUserByPhone(phone: string) {
   const user = await strapi.db.query(USER_UID).findOne({
     where: {
-      $or: [{ username: phone }, { email: createSyntheticEmail(phone) }],
+      $or: [
+        { phone },
+        { username: phone },
+        { email: createSyntheticEmail(phone) },
+      ],
     },
   });
 
@@ -143,6 +151,7 @@ async function createUserForPhone(phone: string) {
   const created = await userService.add({
     username: createDefaultUsername(phone),
     email: createSyntheticEmail(phone),
+    phone,
     password: crypto.randomBytes(24).toString("hex"),
     provider: "local",
     confirmed: true,
@@ -151,6 +160,60 @@ async function createUserForPhone(phone: string) {
   });
 
   return created as UserEntity;
+}
+
+function serializeUser(user: UserEntity, fallbackPhone?: string | null) {
+  const phone =
+    user.phone ??
+    fallbackPhone ??
+    (user.username && normalizePhone(user.username)?.local
+      ? normalizePhone(user.username)?.local
+      : null);
+
+  return {
+    id: user.id,
+    username: user.username ?? undefined,
+    email: user.email ?? undefined,
+    firstName: user.firstName ?? undefined,
+    lastName: user.lastName ?? undefined,
+    phone: phone ?? undefined,
+  };
+}
+
+function validateUsername(username: string) {
+  const trimmed = username.trim();
+  if (trimmed.length < 3) {
+    return "نام کاربری باید حداقل ۳ کاراکتر باشد.";
+  }
+  if (trimmed.length > 30) {
+    return "نام کاربری نباید بیشتر از ۳۰ کاراکتر باشد.";
+  }
+  if (!/^[a-zA-Z0-9_\u0600-\u06FF.-]+$/.test(trimmed)) {
+    return "نام کاربری فقط می‌تواند شامل حروف، اعداد، خط تیره و زیرخط باشد.";
+  }
+  if (normalizePhone(trimmed)) {
+    return "نام کاربری نمی‌تواند شماره موبایل باشد.";
+  }
+  return null;
+}
+
+async function findUserByIdentifier(identifier: string) {
+  const trimmed = identifier.trim();
+  if (!trimmed) return null;
+
+  const asPhone = normalizePhone(trimmed);
+  if (asPhone) {
+    const byPhone = await findUserByPhone(asPhone.local);
+    if (byPhone) return byPhone;
+  }
+
+  const user = await strapi.db.query(USER_UID).findOne({
+    where: {
+      $or: [{ username: trimmed }, { email: trimmed.toLowerCase() }],
+    },
+  });
+
+  return (user as UserEntity | null) ?? null;
 }
 
 async function findOrCreateUserByPhone(phone: string) {
@@ -362,12 +425,151 @@ export default () => ({
       data: {
         jwt,
         isNewUser,
-        user: {
-          id: user.id,
-          username: user.username ?? createDefaultUsername(normalized.local),
-          email: user.email ?? createSyntheticEmail(normalized.local),
-          phone: normalized.local,
+        user: serializeUser(user, normalized.local),
+      },
+    };
+  },
+
+  async loginWithPassword(identifier: string, password: string) {
+    if (!identifier.trim() || !password) {
+      return {
+        ok: false as const,
+        status: 400,
+        message: "نام کاربری/شماره موبایل و رمز عبور الزامی است.",
+      };
+    }
+
+    const user = await findUserByIdentifier(identifier);
+    if (!user?.id) {
+      return {
+        ok: false as const,
+        status: 401,
+        message: "نام کاربری یا رمز عبور اشتباه است.",
+      };
+    }
+
+    if (user.blocked) {
+      return {
+        ok: false as const,
+        status: 403,
+        message: "این حساب کاربری مسدود شده است.",
+      };
+    }
+
+    const userService = strapi.plugin("users-permissions").service("user");
+    const fullUser = await strapi.db.query(USER_UID).findOne({
+      where: { id: user.id },
+      select: ["id", "password", "username", "email", "firstName", "lastName", "phone", "blocked"],
+    });
+
+    if (!fullUser?.password) {
+      return {
+        ok: false as const,
+        status: 401,
+        message: "نام کاربری یا رمز عبور اشتباه است.",
+      };
+    }
+
+    const valid = await userService.validatePassword(password, fullUser.password);
+    if (!valid) {
+      return {
+        ok: false as const,
+        status: 401,
+        message: "نام کاربری یا رمز عبور اشتباه است.",
+      };
+    }
+
+    const jwt = await issueJwtForUser(user.id);
+
+    return {
+      ok: true as const,
+      status: 200,
+      data: {
+        jwt,
+        user: serializeUser(fullUser as UserEntity),
+      },
+    };
+  },
+
+  async updateProfile(
+    userId: number,
+    payload: {
+      firstName?: string;
+      lastName?: string;
+      username?: string;
+    },
+  ) {
+    const existing = await strapi.db.query(USER_UID).findOne({
+      where: { id: userId },
+    });
+
+    if (!existing) {
+      return {
+        ok: false as const,
+        status: 404,
+        message: "کاربر پیدا نشد.",
+      };
+    }
+
+    const updates: Record<string, string> = {};
+
+    if (typeof payload.firstName === "string") {
+      updates.firstName = payload.firstName.trim();
+    }
+
+    if (typeof payload.lastName === "string") {
+      updates.lastName = payload.lastName.trim();
+    }
+
+    if (typeof payload.username === "string") {
+      const username = payload.username.trim();
+      const usernameError = validateUsername(username);
+      if (usernameError) {
+        return {
+          ok: false as const,
+          status: 400,
+          message: usernameError,
+        };
+      }
+
+      if (username !== existing.username) {
+        const taken = await strapi.db.query(USER_UID).findOne({
+          where: { username },
+          select: ["id"],
+        });
+
+        if (taken && taken.id !== userId) {
+          return {
+            ok: false as const,
+            status: 409,
+            message: "این نام کاربری قبلا استفاده شده است.",
+          };
+        }
+
+        updates.username = username;
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return {
+        ok: true as const,
+        status: 200,
+        data: {
+          user: serializeUser(existing as UserEntity),
+          message: "تغییری برای ذخیره وجود نداشت.",
         },
+      };
+    }
+
+    const userService = strapi.plugin("users-permissions").service("user");
+    const updated = await userService.edit(userId, updates);
+
+    return {
+      ok: true as const,
+      status: 200,
+      data: {
+        user: serializeUser(updated as UserEntity),
+        message: "پروفایل با موفقیت به‌روزرسانی شد.",
       },
     };
   },

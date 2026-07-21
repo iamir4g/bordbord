@@ -85,7 +85,18 @@ export default async function ProfilePage() {
       typeof getNested(me.json, ["email"]) === "string"
         ? (getNested(me.json, ["email"]) as string)
         : undefined,
+    firstName:
+      typeof getNested(me.json, ["firstName"]) === "string"
+        ? (getNested(me.json, ["firstName"]) as string)
+        : undefined,
+    lastName:
+      typeof getNested(me.json, ["lastName"]) === "string"
+        ? (getNested(me.json, ["lastName"]) as string)
+        : undefined,
     phone:
+      (typeof getNested(me.json, ["phone"]) === "string"
+        ? (getNested(me.json, ["phone"]) as string)
+        : undefined) ??
       extractPhoneFromIdentity(
         typeof getNested(me.json, ["username"]) === "string"
           ? (getNested(me.json, ["username"]) as string)
@@ -93,7 +104,8 @@ export default async function ProfilePage() {
         typeof getNested(me.json, ["email"]) === "string"
           ? (getNested(me.json, ["email"]) as string)
           : undefined,
-      ) ?? undefined,
+      ) ??
+      undefined,
   };
 
   const wishlistRes = await fetchJson("/api/wishlist/me", jwt);

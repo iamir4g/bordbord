@@ -3,6 +3,8 @@
 import Link from "next/link";
 import * as React from "react";
 
+import { useAuth } from "@/components/organisms/auth-provider";
+
 import type { Game } from "@/services/strapi";
 import { Container } from "@/components/atoms/container";
 import { Heading } from "@/components/atoms/heading";
@@ -18,6 +20,8 @@ export type ProfileUser = {
   username?: string;
   email?: string;
   phone?: string;
+  firstName?: string;
+  lastName?: string;
 };
 
 export type ProfileComment = {
@@ -55,9 +59,9 @@ function formatIsoDate(value?: string | null) {
 }
 
 function statusBadge(comment: ProfileComment) {
-  if (comment.isApproved) return <Badge variant="accent">Approved</Badge>;
-  if (comment.isRejected) return <Badge variant="amber">Rejected</Badge>;
-  return <Badge>Pending</Badge>;
+  if (comment.isApproved) return <Badge variant="accent">تایید شده</Badge>;
+  if (comment.isRejected) return <Badge variant="amber">رد شده</Badge>;
+  return <Badge>در انتظار</Badge>;
 }
 
 function notificationsKey(userId: number) {
@@ -101,10 +105,10 @@ function maybeSeedNotifications(userId: number, comments: ProfileComment[]) {
       idx === 0 ? "like" : idx === 1 ? "reply" : "dislike";
     const msg =
       type === "reply"
-        ? "Someone replied to your comment."
+        ? "به نظر شما پاسخ داده شد."
         : type === "like"
-          ? "Someone liked your comment."
-          : "Someone disliked your comment.";
+          ? "نظر شما پسندیده شد."
+          : "نظر شما نپسندیده شد.";
     return {
       id: `${userId}-${c.id}-${type}`,
       type,
@@ -128,11 +132,20 @@ export function ProfileDashboard({
   wishlistGames: Game[];
   comments: ProfileComment[];
 }) {
+  const { refresh } = useAuth();
   const [section, setSection] = React.useState<
-    "wishlist" | "comments" | "notifications" | "security"
-  >("wishlist");
+    "profile" | "wishlist" | "comments" | "notifications" | "security"
+  >("profile");
   const [notifications, setNotifications] = React.useState<LocalNotification[]>(
     [],
+  );
+  const [firstName, setFirstName] = React.useState(user.firstName ?? "");
+  const [lastName, setLastName] = React.useState(user.lastName ?? "");
+  const [username, setUsername] = React.useState(user.username ?? "");
+  const [profileLoading, setProfileLoading] = React.useState(false);
+  const [profileError, setProfileError] = React.useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = React.useState<string | null>(
+    null,
   );
   const [password, setPassword] = React.useState("");
   const [confirmPassword, setConfirmPassword] = React.useState("");
@@ -169,6 +182,35 @@ export function ProfileDashboard({
       saveNotifications(user.id, next);
       return next;
     });
+  }
+
+  async function handleProfileSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setProfileError(null);
+    setProfileSuccess(null);
+    setProfileLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ firstName, lastName, username }),
+      });
+      const json = (await res.json().catch(() => null)) as {
+        error?: string;
+        message?: string;
+      } | null;
+
+      if (!res.ok) {
+        setProfileError(json?.error ?? "ذخیره پروفایل ناموفق بود.");
+        return;
+      }
+
+      setProfileSuccess(json?.message ?? "پروفایل با موفقیت به‌روزرسانی شد.");
+      await refresh();
+    } finally {
+      setProfileLoading(false);
+    }
   }
 
   async function handlePasswordSubmit(e: React.FormEvent) {
@@ -211,8 +253,13 @@ export function ProfileDashboard({
     }
   }
 
+  const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ");
   const displayName =
-    user.phone ?? user.username ?? user.email ?? `User #${user.id}`;
+    fullName ||
+    user.username ||
+    user.phone ||
+    user.email ||
+    `کاربر #${user.id}`;
 
   return (
     <div className="flex flex-1 flex-col">
@@ -234,9 +281,22 @@ export function ProfileDashboard({
         <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-4">
           <Card className="lg:col-span-1">
             <CardHeader className="text-sm font-semibold text-zinc-100">
-              Dashboard
+              پنل کاربری
             </CardHeader>
             <CardContent className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setSection("profile")}
+                className={cn(
+                  buttonVariants({
+                    variant: section === "profile" ? "default" : "outline",
+                    size: "sm",
+                  }),
+                  "w-full justify-start",
+                )}
+              >
+                اطلاعات کاربری
+              </button>
               <button
                 type="button"
                 onClick={() => setSection("wishlist")}
@@ -248,7 +308,7 @@ export function ProfileDashboard({
                   "w-full justify-start",
                 )}
               >
-                My Wishlist
+                مورد علاقه
               </button>
               <button
                 type="button"
@@ -261,7 +321,7 @@ export function ProfileDashboard({
                   "w-full justify-start",
                 )}
               >
-                My Comments
+                نظرات من
               </button>
               <button
                 type="button"
@@ -275,7 +335,7 @@ export function ProfileDashboard({
                   "w-full justify-start gap-2",
                 )}
               >
-                Notifications
+                اعلان‌ها
                 {unreadCount > 0 ? (
                   <Badge variant="amber">{unreadCount}</Badge>
                 ) : null}
@@ -291,20 +351,117 @@ export function ProfileDashboard({
                   "w-full justify-start",
                 )}
               >
-                Security
+                امنیت
               </button>
             </CardContent>
           </Card>
 
           <div className="lg:col-span-3">
+            {section === "profile" ? (
+              <div>
+                <Heading className="text-xl">اطلاعات کاربری</Heading>
+                <Card className="mt-4">
+                  <CardContent className="pt-6">
+                    <form
+                      onSubmit={handleProfileSubmit}
+                      className="space-y-4"
+                    >
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <label className="text-sm text-slate-300">نام</label>
+                          <Input
+                            value={firstName}
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>,
+                            ) => setFirstName(e.target.value)}
+                            placeholder="نام"
+                            autoComplete="given-name"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-sm text-slate-300">
+                            نام خانوادگی
+                          </label>
+                          <Input
+                            value={lastName}
+                            onChange={(
+                              e: React.ChangeEvent<HTMLInputElement>,
+                            ) => setLastName(e.target.value)}
+                            placeholder="نام خانوادگی"
+                            autoComplete="family-name"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm text-slate-300">
+                          نام کاربری
+                        </label>
+                        <Input
+                          value={username}
+                          onChange={(
+                            e: React.ChangeEvent<HTMLInputElement>,
+                          ) => setUsername(e.target.value)}
+                          placeholder="نام کاربری"
+                          autoComplete="username"
+                          dir="ltr"
+                          className="text-start"
+                        />
+                        <p className="text-xs text-slate-500">
+                          با نام کاربری می‌توانی با رمز عبور وارد شوی.
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm text-slate-300">
+                          شماره موبایل
+                        </label>
+                        <Input
+                          value={user.phone ?? ""}
+                          disabled
+                          dir="ltr"
+                          className="text-start opacity-70"
+                        />
+                        <p className="text-xs text-slate-500">
+                          شماره موبایل قابل تغییر نیست. برای ورود همیشه
+                          می‌توانی از OTP استفاده کنی.
+                        </p>
+                      </div>
+
+                      {profileError ? (
+                        <div className="text-sm text-rose-400">
+                          {profileError}
+                        </div>
+                      ) : null}
+                      {profileSuccess ? (
+                        <div className="text-sm text-emerald-400">
+                          {profileSuccess}
+                        </div>
+                      ) : null}
+
+                      <Button
+                        type="submit"
+                        disabled={profileLoading}
+                        className="w-full sm:w-auto"
+                      >
+                        {profileLoading
+                          ? "در حال ذخیره..."
+                          : "ذخیره اطلاعات"}
+                      </Button>
+                    </form>
+                  </CardContent>
+                </Card>
+              </div>
+            ) : null}
+
             {section === "wishlist" ? (
               <div>
-                <Heading className="text-xl">My Wishlist</Heading>
+                <Heading className="text-xl">مورد علاقه</Heading>
                 <div className="mt-4">
                   {wishlistGames.length === 0 ? (
                     <Card>
                       <CardContent className="pt-4 text-sm text-slate-300">
-                        Your wishlist is empty.
+                        هنوز بازی‌ای به مورد علاقه اضافه نکرده‌ای.
                       </CardContent>
                     </Card>
                   ) : (
@@ -316,12 +473,12 @@ export function ProfileDashboard({
 
             {section === "comments" ? (
               <div>
-                <Heading className="text-xl">My Comments</Heading>
+                <Heading className="text-xl">نظرات من</Heading>
                 <div className="mt-4 space-y-3">
                   {comments.length === 0 ? (
                     <Card>
                       <CardContent className="pt-4 text-sm text-slate-300">
-                        No comments yet.
+                        هنوز نظری ثبت نکرده‌ای.
                       </CardContent>
                     </Card>
                   ) : (
@@ -338,10 +495,10 @@ export function ProfileDashboard({
                                   {c.game.title ?? c.game.slug}
                                 </Link>
                               ) : (
-                                <span>{c.game?.title ?? "Unknown game"}</span>
+                                <span>{c.game?.title ?? "بازی نامشخص"}</span>
                               )}
                               {c.createdAt ? (
-                                <span className="ml-2 text-xs text-slate-500">
+                                <span className="ms-2 text-xs text-slate-500">
                                   {formatIsoDate(c.createdAt)}
                                 </span>
                               ) : null}
@@ -362,20 +519,20 @@ export function ProfileDashboard({
             {section === "notifications" ? (
               <div>
                 <div className="flex items-center justify-between gap-4">
-                  <Heading className="text-xl">Notification Center</Heading>
+                  <Heading className="text-xl">مرکز اعلان‌ها</Heading>
                   <Button
                     onClick={markAllAsRead}
                     variant="outline"
                     disabled={notifications.length === 0}
                   >
-                    Mark all as read
+                    همه را خوانده‌شده کن
                   </Button>
                 </div>
                 <div className="mt-4 space-y-3">
                   {notifications.length === 0 ? (
                     <Card>
                       <CardContent className="pt-4 text-sm text-slate-300">
-                        No notifications yet.
+                        هنوز اعلانی نداری.
                       </CardContent>
                     </Card>
                   ) : (
@@ -401,9 +558,9 @@ export function ProfileDashboard({
                                 )}
                               </div>
                               {n.read ? (
-                                <Badge>Read</Badge>
+                                <Badge>خوانده‌شده</Badge>
                               ) : (
-                                <Badge variant="amber">Unread</Badge>
+                                <Badge variant="amber">جدید</Badge>
                               )}
                             </div>
                             <div className="mt-2 flex items-center justify-between gap-3">
@@ -416,7 +573,7 @@ export function ProfileDashboard({
                                   variant="outline"
                                   size="sm"
                                 >
-                                  Mark as read
+                                  علامت‌گذاری به‌عنوان خوانده‌شده
                                 </Button>
                               ) : null}
                             </div>

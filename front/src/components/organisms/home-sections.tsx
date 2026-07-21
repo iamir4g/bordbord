@@ -130,7 +130,7 @@ export function HomeSections({
                 {[
                   "محاسبه معدل وزنی هوشمند با مدل IMDB",
                   "کلوب منتقدین معتبر و رنک‌های برنز تا طلا",
-                  "پروفایل شخصی‌سازی شده با قابلیت wishlist",
+                  "پروفایل شخصی‌سازی شده با قابلیت مورد علاقه",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-2 text-xs">
                     <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />

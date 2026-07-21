@@ -279,7 +279,7 @@ function WishlistInline({
       <Heart
         className={`h-3.5 w-3.5 ${active ? "fill-rose-500 text-rose-500" : ""}`}
       />
-      <span>{active ? "در لیست علاقه‌مندی‌ها" : "افزودن به علاقه‌مندی‌ها"}</span>
+      <span>{active ? "در مورد علاقه" : "افزودن به مورد علاقه"}</span>
     </button>
   );
 }

@@ -114,7 +114,7 @@ export function WishlistButton({
     }
   }
 
-  const label = active ? "در علاقه‌مندی‌ها" : "افزودن به علاقه‌مندی‌ها";
+  const label = active ? "در مورد علاقه" : "افزودن به مورد علاقه";
   const suffix = typeof count === "number" ? ` (${formatCount(count)})` : "";
 
   return (
@@ -127,7 +127,7 @@ export function WishlistButton({
     >
       <span className="inline-flex items-center gap-2">
         <HeartIcon filled={active} />
-        <span>{loading ? "Loading…" : label}</span>
+        <span>{loading ? "در حال بارگذاری…" : label}</span>
       </span>
       <span className="tabular-nums text-sm opacity-90">{suffix.trim()}</span>
     </Button>

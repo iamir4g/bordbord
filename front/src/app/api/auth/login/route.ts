@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { isValidIranPhone, normalizePhone } from "@/lib/auth-phone";
+
 function getStrapiBaseUrl() {
   return (
     process.env.STRAPI_API_URL ??
@@ -15,17 +17,22 @@ export async function POST(req: Request) {
     password?: string;
   } | null;
 
-  const identifier = payload?.identifier ?? payload?.email ?? "";
+  const rawIdentifier = payload?.identifier ?? payload?.email ?? "";
   const password = payload?.password ?? "";
 
-  if (!identifier || !password) {
+  if (!rawIdentifier || !password) {
     return NextResponse.json(
-      { error: "Missing credentials." },
+      { error: "نام کاربری/شماره موبایل و رمز عبور الزامی است." },
       { status: 400 },
     );
   }
 
-  const url = new URL("/api/auth/local", getStrapiBaseUrl());
+  const identifier =
+    isValidIranPhone(rawIdentifier) || rawIdentifier.startsWith("09")
+      ? normalizePhone(rawIdentifier)
+      : rawIdentifier.trim();
+
+  const url = new URL("/api/otp-auth/login", getStrapiBaseUrl());
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -38,13 +45,13 @@ export async function POST(req: Request) {
   const json = (await res.json().catch(() => null)) as {
     jwt?: string;
     user?: unknown;
-    error?: unknown;
+    error?: string;
   } | null;
 
   if (!res.ok || !json?.jwt) {
     return NextResponse.json(
-      { error: "Invalid email/username or password." },
-      { status: 401 },
+      { error: json?.error ?? "نام کاربری یا رمز عبور اشتباه است." },
+      { status: res.status === 401 || res.status === 403 ? res.status : 401 },
     );
   }
 

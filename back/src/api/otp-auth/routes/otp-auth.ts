@@ -24,5 +24,21 @@ export default {
         auth: {},
       },
     },
+    {
+      method: "POST",
+      path: "/otp-auth/login",
+      handler: "otp-auth.login",
+      config: {
+        auth: false,
+      },
+    },
+    {
+      method: "PUT",
+      path: "/otp-auth/profile",
+      handler: "otp-auth.updateProfile",
+      config: {
+        auth: {},
+      },
+    },
   ],
 };

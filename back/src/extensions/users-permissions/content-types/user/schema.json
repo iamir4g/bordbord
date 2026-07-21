@@ -1,0 +1,14 @@
+{
+  "attributes": {
+    "firstName": {
+      "type": "string"
+    },
+    "lastName": {
+      "type": "string"
+    },
+    "phone": {
+      "type": "string",
+      "unique": true
+    }
+  }
+}

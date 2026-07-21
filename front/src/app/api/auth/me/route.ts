@@ -57,18 +57,28 @@ export async function GET() {
     id?: number;
     username?: string;
     email?: string;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
   } | null;
 
   if (!user || typeof user.id !== "number") {
     return NextResponse.json({ user: null }, { status: 401 });
   }
 
+  const phone =
+    user.phone ??
+    extractPhoneFromIdentity(user.username, user.email) ??
+    undefined;
+
   return NextResponse.json({
     user: {
       id: user.id,
       username: user.username,
       email: user.email,
-      phone: extractPhoneFromIdentity(user.username, user.email) ?? undefined,
+      firstName: user.firstName ?? undefined,
+      lastName: user.lastName ?? undefined,
+      phone,
     },
   });
 }

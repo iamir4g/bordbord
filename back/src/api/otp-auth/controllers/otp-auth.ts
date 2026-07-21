@@ -60,4 +60,44 @@ export default {
 
     ctx.body = result.data;
   },
+
+  async login(ctx: any) {
+    const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+    const identifier = getStringField(body, "identifier");
+    const password = getStringField(body, "password");
+
+    const service = strapi.service("api::otp-auth.otp-auth");
+    const result = await service.loginWithPassword(identifier, password);
+
+    if (!result.ok) {
+      ctx.status = result.status;
+      ctx.body = { error: result.message };
+      return;
+    }
+
+    ctx.body = result.data;
+  },
+
+  async updateProfile(ctx: any) {
+    const userId = ctx.state?.user?.id;
+    if (typeof userId !== "number") {
+      return ctx.unauthorized();
+    }
+
+    const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+    const service = strapi.service("api::otp-auth.otp-auth");
+    const result = await service.updateProfile(userId, {
+      firstName: getStringField(body, "firstName"),
+      lastName: getStringField(body, "lastName"),
+      username: getStringField(body, "username"),
+    });
+
+    if (!result.ok) {
+      ctx.status = result.status;
+      ctx.body = { error: result.message };
+      return;
+    }
+
+    ctx.body = result.data;
+  },
 };
